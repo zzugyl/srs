@@ -294,6 +294,8 @@ Remark:
 
 ## Releases
 
+* 2018-08-12, [Release v2.0-r4][r2.0r4], 2.0 release4, 2.0.255, 86915 lines.
+* 2018-07-18, [Release v2.0-r3][r2.0r3], 2.0 release3, 2.0.248, 86775 lines.
 * 2017-06-10, [Release v2.0-r2][r2.0r2], 2.0 release2, 2.0.243, 86670 lines.
 * 2017-04-18, [Release v2.0-r1][r2.0r1], 2.0 release1, 2.0.239, 86515 lines.
 * 2017-03-03, [Release v2.0-r0][r2.0r0], 2.0 release0, 2.0.234, 86373 lines.
@@ -332,6 +334,21 @@ Remark:
 
 ## History
 
+* <strong>v2.0, 2018-08-12, [2.0 release4(2.0.255)][r2.0r4] released. 86915 lines.</strong>
+* v2.0, 2018-08-12, For [#1202][bug #1202], Support edge/forward to Aliyun CDN. 2.0.255 
+* v2.0, 2018-08-11, For [#910][bug #910], Support HTTP FLV with HTTP callback. 2.0.254
+* v2.0, 2018-08-11, For [#1110][bug #1110], Refine params in http callback. 2.0.253
+* v2.0, 2018-08-05, Refine HTTP-FLV latency, support realtime mode. 2.0.252
+* v2.0, 2018-08-04, For [#1110][bug #1110], Support params in http callback. 2.0.251
+* v2.0, 2018-08-02, For [#1031][bug #1031], SRS edge support douyu.com. 2.0.250
+* v2.0, 2018-07-21, Merge [#1119][bug #1119], fix memory leak. 2.0.249
+* <strong>v2.0, 2018-07-18, [2.0 release3(2.0.248)][r2.0r3] released. 86775 lines.</strong>
+* v2.0, 2018-07-17, Merge [#1176][bug #1176], fix scaned issues. 2.0.248
+* v2.0, 2018-02-28, Merge [#1077][bug #1077], fix crash for edge HLS. 2.0.247
+* v2.0, 2018-02-13, Fix [#1059][bug #1059], support vhost in stream parameters. 2.0.246
+* v2.0, 2018-01-07, Merge [#1045][bug #1045], fix [#1044][bug #1044], TCP connection alive detection. 2.0.245
+* v2.0, 2018-01-04, Merge [#1039][bug #1039], fix bug of init.d script.
+* v2.0, 2018-01-01, Merge [#1033][bug #1033], allow user to add some specific flags. 2.0.244
 * <strong>v2.0, 2017-06-10, [2.0 release2(2.0.243)][r2.0r2] released. 86670 lines.</strong>
 * v2.0, 2017-05-29, Merge [#899][bug #899] to fix [#893][bug #893], ts PES ext length. 2.0.243
 * v2.0, 2017-05-01, Fix [#865][bug #865], shouldn't remove ts/m3u8 when hls_dispose disabled. 2.0.242
@@ -797,6 +814,8 @@ The latency between encoder and player with realtime config([CN][v2_CN_LowLatenc
 |   2014-12-03  |   1.0.10  |   0.4s    |   0.4s    |   0.9s    |   1.2s    |
 |   2014-12-12  |   2.0.70  |[0.1s][p13]|[0.4s][p14]|   1.0s    |   0.9s    |
 |   2014-12-16  |   2.0.72  |   0.1s    |   0.4s    |[0.8s][p15]|[0.6s][p16]|
+
+> 2018-08-05, [c45f72e](https://github.com/ossrs/srs/commit/c45f72ef7bac9c7cf85b9125fc9e3aafd53f396f), Refine HTTP-FLV latency, support realtime mode. 2.0.252
 
 We use FMLE as encoder for benchmark. The latency of server is 0.1s+, 
 and the bottleneck is the encoder. For more information, read 
@@ -1296,10 +1315,24 @@ Winlin
 [bug #865]: https://github.com/ossrs/srs/issues/865
 [bug #893]: https://github.com/ossrs/srs/issues/893
 [bug #899]: https://github.com/ossrs/srs/issues/899
+[bug #1033]: https://github.com/ossrs/srs/issues/1033
+[bug #1039]: https://github.com/ossrs/srs/issues/1039
+[bug #1044]: https://github.com/ossrs/srs/issues/1044
+[bug #1045]: https://github.com/ossrs/srs/issues/1045
+[bug #1059]: https://github.com/ossrs/srs/issues/1059
+[bug #1077]: https://github.com/ossrs/srs/issues/1077
+[bug #1176]: https://github.com/ossrs/srs/issues/1176
+[bug #1119]: https://github.com/ossrs/srs/issues/1119
+[bug #1031]: https://github.com/ossrs/srs/issues/1031
+[bug #1110]: https://github.com/ossrs/srs/issues/1110
+[bug #910]: https://github.com/ossrs/srs/issues/910
+[bug #1202]: https://github.com/ossrs/srs/issues/1202
 [bug #xxxxxxxxxx]: https://github.com/ossrs/srs/issues/xxxxxxxxxx
 
 [exo #828]: https://github.com/google/ExoPlayer/pull/828
 
+[r2.0r4]: https://github.com/ossrs/srs/releases/tag/v2.0-r4
+[r2.0r3]: https://github.com/ossrs/srs/releases/tag/v2.0-r3
 [r2.0r2]: https://github.com/ossrs/srs/releases/tag/v2.0-r2
 [r2.0r1]: https://github.com/ossrs/srs/releases/tag/v2.0-r1
 [r2.0r0]: https://github.com/ossrs/srs/releases/tag/v2.0-r0
