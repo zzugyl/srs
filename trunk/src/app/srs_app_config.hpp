@@ -988,6 +988,11 @@ public:
     */
     virtual int                 get_dvr_duration(std::string vhost);
     /**
+    * whether create new dvr file when receive new stream.
+    * set on means always close dvr file when unpublish.
+    */
+    virtual bool                get_dvr_new_file(std::string vhost);
+    /**
     * whether wait keyframe to reap segment.
     */
     virtual bool                get_dvr_wait_keyframe(std::string vhost);

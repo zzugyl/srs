@@ -1835,7 +1835,7 @@ int SrsConfig::check_config()
             if (n == "dvr") {
                 for (int j = 0; j < (int)conf->directives.size(); j++) {
                     string m = conf->at(j)->name.c_str();
-                    if (m != "enabled" && m != "dvr_path" && m != "dvr_plan"
+                    if (m != "enabled" && m != "dvr_path" && m != "dvr_plan" && m != "dvr_new_file"
                         && m != "dvr_duration" && m != "dvr_wait_keyframe" && m != "time_jitter"
                         ) {
                         ret = ERROR_SYSTEM_CONFIG_INVALID;
@@ -4054,6 +4054,23 @@ int SrsConfig::get_dvr_duration(string vhost)
     }
     
     return ::atoi(conf->arg0().c_str());
+}
+
+bool SrsConfig::get_dvr_new_file(string vhost)
+{
+    SrsConfDirective* dvr = get_dvr(vhost);
+    
+    if (!dvr) {
+        return true;
+    }
+    
+    SrsConfDirective* conf = dvr->get("dvr_new_file");
+    
+    if (!conf || conf->arg0().empty()) {
+        return true;
+    }
+    
+    return SRS_CONF_PERFER_TRUE(conf->arg0());
 }
 
 bool SrsConfig::get_dvr_wait_keyframe(string vhost)
