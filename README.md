@@ -294,6 +294,7 @@ Remark:
 
 ## Releases
 
+* 2018-10-28, [Release v2.0-r5][r2.0r5], 2.0 release5, 2.0.258, 86916 lines.
 * 2018-08-12, [Release v2.0-r4][r2.0r4], 2.0 release4, 2.0.255, 86915 lines.
 * 2018-07-18, [Release v2.0-r3][r2.0r3], 2.0 release3, 2.0.248, 86775 lines.
 * 2017-06-10, [Release v2.0-r2][r2.0r2], 2.0 release2, 2.0.243, 86670 lines.
@@ -334,6 +335,8 @@ Remark:
 
 ## History
 
+* <strong>v2.0, 2018-10-28, [2.0 release5(2.0.258)][r2.0r5] released. 86916 lines.</strong>
+* v2.0, 2018-10-28, Fix [#1250][bug #1250], Support build on OSX10.14 Mojave. 2.0.258
 * v2.0, 2018-10-08, Merge [#1236][bug #1236], Fix sleep bug in us. 2.0.257
 * v2.0, 2018-10-08, Merge [#1237][bug #1237], Support param for transcoder. 2.0.256
 * <strong>v2.0, 2018-08-12, [2.0 release4(2.0.255)][r2.0r4] released. 86915 lines.</strong>
@@ -1331,10 +1334,12 @@ Winlin
 [bug #1202]: https://github.com/ossrs/srs/issues/1202
 [bug #1237]: https://github.com/ossrs/srs/issues/1237
 [bug #1236]: https://github.com/ossrs/srs/issues/1236
+[bug #1250]: https://github.com/ossrs/srs/issues/1250
 [bug #xxxxxxxxxx]: https://github.com/ossrs/srs/issues/xxxxxxxxxx
 
 [exo #828]: https://github.com/google/ExoPlayer/pull/828
 
+[r2.0r5]: https://github.com/ossrs/srs/releases/tag/v2.0-r5
 [r2.0r4]: https://github.com/ossrs/srs/releases/tag/v2.0-r4
 [r2.0r3]: https://github.com/ossrs/srs/releases/tag/v2.0-r3
 [r2.0r2]: https://github.com/ossrs/srs/releases/tag/v2.0-r2
