@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2013-2018 Winlin
+ * Copyright (c) 2013-2019 Winlin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -37,7 +37,7 @@ class SrsServer;
 #include <srs_http_stack.hpp>
 #include <srs_app_reload.hpp>
 
-// for http root.
+// For http root.
 class SrsGoApiRoot : public ISrsHttpHandler
 {
 public:
@@ -187,7 +187,7 @@ public:
     virtual ~SrsGoApiRaw();
 public:
     virtual srs_error_t serve_http(ISrsHttpResponseWriter* w, ISrsHttpMessage* r);
-// interface ISrsReloadHandler
+// Interface ISrsReloadHandler
 public:
     virtual srs_error_t on_reload_http_api_raw_api();
 };
@@ -219,17 +219,14 @@ private:
 public:
     SrsHttpApi(IConnectionManager* cm, srs_netfd_t fd, SrsHttpServeMux* m, std::string cip);
     virtual ~SrsHttpApi();
-// interface IKbpsDelta
+// Interface ISrsKbpsDelta
 public:
-    virtual void resample();
-    virtual int64_t get_send_bytes_delta();
-    virtual int64_t get_recv_bytes_delta();
-    virtual void cleanup();
+    virtual void remark(int64_t* in, int64_t* out);
 protected:
     virtual srs_error_t do_cycle();
 private:
     virtual srs_error_t process_request(ISrsHttpResponseWriter* w, ISrsHttpMessage* r);
-// interface ISrsReloadHandler
+// Interface ISrsReloadHandler
 public:
     virtual srs_error_t on_reload_http_api_crossdomain();
 };

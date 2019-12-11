@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2013-2018 Winlin
+ * Copyright (c) 2013-2019 Winlin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -28,56 +28,51 @@
 
 #include <srs_app_reload.hpp>
 
-/**
- * the stage info to calc the age.
- */
+// The stage info to calc the age.
 class SrsStageInfo : public ISrsReloadHandler
 {
 public:
     int stage_id;
-    int pithy_print_time_ms;
+    srs_utime_t interval;
     int nb_clients;
 public:
-    int64_t age;
+    srs_utime_t age;
 public:
     SrsStageInfo(int _stage_id);
     virtual ~SrsStageInfo();
     virtual void update_print_time();
 public:
-    virtual void elapse(int64_t diff);
+    virtual void elapse(srs_utime_t diff);
     virtual bool can_print();
 public:
     virtual srs_error_t on_reload_pithy_print();
 };
 
-/**
- * the stage is used for a collection of object to do print,
- * the print time in a stage is constant and not changed,
- * that is, we always got one message to print every specified time.
- *
- * for example, stage #1 for all play clients, print time is 3s,
- * if there is 1client, it will print every 3s.
- * if there is 10clients, random select one to print every 3s.
- * Usage:
- *        SrsPithyPrint* pprint = SrsPithyPrint::create_rtmp_play();
- *        SrsAutoFree(SrsPithyPrint, pprint);
- *        while (true) {
- *            pprint->elapse();
- *            if (pprint->can_print()) {
- *                // print pithy message.
- *                // user can get the elapse time by: pprint->age()
- *            }
- *            // read and write RTMP messages.
- *        }
- */
+// The stage is used for a collection of object to do print,
+// the print time in a stage is constant and not changed,
+// that is, we always got one message to print every specified time.
+//
+// For example, stage #1 for all play clients, print time is 3s,
+// if there is 1client, it will print every 3s.
+// if there is 10clients, random select one to print every 3s.
+// Usage:
+//        SrsPithyPrint* pprint = SrsPithyPrint::create_rtmp_play();
+//        SrsAutoFree(SrsPithyPrint, pprint);
+//        while (true) {
+//            pprint->elapse();
+//            if (pprint->can_print()) {
+//                // print pithy message.
+//                // user can get the elapse time by: pprint->age()
+//            }
+//            // read and write RTMP messages.
+//        }
 class SrsPithyPrint
 {
 private:
     int client_id;
     int stage_id;
-    // in ms.
-    int64_t _age;
-    int64_t previous_tick;
+    srs_utime_t _age;
+    srs_utime_t previous_tick;
 private:
     SrsPithyPrint(int _stage_id);
 public:
@@ -94,27 +89,17 @@ public:
     static SrsPithyPrint* create_http_stream_cache();
     virtual ~SrsPithyPrint();
 private:
-    /**
-     * enter the specified stage, return the client id.
-     */
+    // Enter the specified stage, return the client id.
     virtual int enter_stage();
-    /**
-     * leave the specified stage, release the client id.
-     */
+    // Leave the specified stage, release the client id.
     virtual void leave_stage();
 public:
-    /**
-     * auto calc the elapse time
-     */
+    // Auto calc the elapse time
     virtual void elapse();
-    /**
-     * whether current client can print.
-     */
+    // Whether current client can print.
     virtual bool can_print();
-    /**
-     * get the elapsed time in ms.
-     */
-    virtual int64_t age();
+    // Get the elapsed time in srs_utime_t.
+    virtual srs_utime_t age();
 };
 
 #endif

@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2013-2018 Winlin
+ * Copyright (c) 2013-2019 Winlin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -60,6 +60,8 @@ enum SrsVideoCodecId
     SrsVideoCodecIdOn2VP6WithAlphaChannel = 5,
     SrsVideoCodecIdScreenVideoVersion2 = 6,
     SrsVideoCodecIdAVC = 7,
+    // See page 79 at @doc https://github.com/CDN-Union/H265/blob/master/Document/video_file_format_spec_v10_1_ksyun_20170615.doc
+    SrsVideoCodecIdHEVC = 12,
 };
 std::string srs_video_codec_id2str(SrsVideoCodecId codec);
 
@@ -152,6 +154,8 @@ enum SrsAudioCodecId
     SrsAudioCodecIdReserved = 9,
     SrsAudioCodecIdAAC = 10,
     SrsAudioCodecIdSpeex = 11,
+    // For FLV, it's undefined, we define it as Opus for WebRTC.
+    SrsAudioCodecIdOpus = 13,
     SrsAudioCodecIdReservedMP3_8kHz = 14,
     SrsAudioCodecIdReservedDeviceSpecificSound = 15,
 };
@@ -160,7 +164,7 @@ std::string srs_audio_codec_id2str(SrsAudioCodecId codec);
 /**
  * The audio AAC frame trait(characteristic).
  * @doc video_file_format_spec_v10_1.pdf, page 77, E.4.2 Audio Tags
- * AACPacketType IF SoundFormat == 10 UI8
+ * AACPacketType IF SoundFormat == 10 or 13 UI8
  * The following values are defined:
  *      0 = AAC sequence header
  *      1 = AAC raw
@@ -168,11 +172,16 @@ std::string srs_audio_codec_id2str(SrsAudioCodecId codec);
 enum SrsAudioAacFrameTrait
 {
     // set to the max value to reserved, for array map.
-    SrsAudioAacFrameTraitReserved = 2,
-    SrsAudioAacFrameTraitForbidden = 2,
+    SrsAudioAacFrameTraitReserved = 0xff,
+    SrsAudioAacFrameTraitForbidden = 0xff,
     
     SrsAudioAacFrameTraitSequenceHeader = 0,
     SrsAudioAacFrameTraitRawData = 1,
+    
+    // For Opus, the frame trait, may has more than one traits.
+    SrsAudioOpusFrameTraitRaw = 2,
+    SrsAudioOpusFrameTraitSamplingRate = 4,
+    SrsAudioOpusFrameTraitAudioLevel = 8,
 };
 
 /**
@@ -189,13 +198,23 @@ enum SrsAudioAacFrameTrait
 enum SrsAudioSampleRate
 {
     // set to the max value to reserved, for array map.
-    SrsAudioSampleRateReserved = 4,
-    SrsAudioSampleRateForbidden = 4,
+    SrsAudioSampleRateReserved = 0xff,
+    SrsAudioSampleRateForbidden = 0xff,
     
+    // For FLV, only support 5, 11, 22, 44KHz sampling rate.
     SrsAudioSampleRate5512 = 0,
     SrsAudioSampleRate11025 = 1,
     SrsAudioSampleRate22050 = 2,
     SrsAudioSampleRate44100 = 3,
+    
+    // For Opus, support 8, 12, 16, 24, 48KHz
+    // We will write a UINT8 sampling rate after FLV audio tag header.
+    // @doc https://tools.ietf.org/html/rfc6716#section-2
+    SrsAudioSampleRateNB8kHz   = 8,  // NB (narrowband)
+    SrsAudioSampleRateMB12kHz  = 12, // MB (medium-band)
+    SrsAudioSampleRateWB16kHz  = 16, // WB (wideband)
+    SrsAudioSampleRateSWB24kHz = 24, // SWB (super-wideband)
+    SrsAudioSampleRateFB48kHz  = 48, // FB (fullband)
 };
 std::string srs_audio_sample_rate2str(SrsAudioSampleRate v);
 
@@ -685,7 +704,7 @@ public:
 public:
     // for sequence header, whether parse the h.264 sps.
     // TODO: FIXME: Refine it.
-    bool            avc_parse_sps;
+    bool avc_parse_sps;
 public:
     SrsFormat();
     virtual ~SrsFormat();

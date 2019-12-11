@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2013-2018 Winlin
+ * Copyright (c) 2013-2019 Winlin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -48,10 +48,10 @@ using namespace std;
 #include <srs_app_rtmp_conn.hpp>
 
 // when edge timeout, retry next.
-#define SRS_EDGE_INGESTER_TMMS (5*1000)
+#define SRS_EDGE_INGESTER_TIMEOUT (5 * SRS_UTIME_SECONDS)
 
 // when edge error, wait for quit
-#define SRS_EDGE_FORWARDER_TMMS (150)
+#define SRS_EDGE_FORWARDER_TIMEOUT (150 * SRS_UTIME_MILLISECONDS)
 
 SrsEdgeUpstream::SrsEdgeUpstream()
 {
@@ -100,29 +100,32 @@ srs_error_t SrsEdgeRtmpUpstream::connect(SrsRequest* r, SrsLbRoundRobin* lb)
             string _schema, _vhost, _app, _stream, _param, _host;
             srs_discovery_tc_url(redirect, _schema, _host, _vhost, _app, _stream, _port, _param);
             
-            srs_warn("RTMP redirect %s:%d to %s:%d stream=%s", server.c_str(), port, _host.c_str(), _port, _stream.c_str());
             server = _host;
             port = _port;
         }
+
+        // Remember the current selected server.
+        selected_ip = server;
+        selected_port = port;
         
         // support vhost tranform for edge,
         // @see https://github.com/ossrs/srs/issues/372
         std::string vhost = _srs_config->get_vhost_edge_transform_vhost(req->vhost);
         vhost = srs_string_replace(vhost, "[vhost]", req->vhost);
         
-        url = srs_generate_rtmp_url(server, port, vhost, req->app, req->stream);
+        url = srs_generate_rtmp_url(server, port, req->host, vhost, req->app, req->stream, req->param);
     }
     
     srs_freep(sdk);
-    int64_t cto = SRS_EDGE_INGESTER_TMMS;
-    int64_t sto = SRS_CONSTS_RTMP_PULSE_TMMS;
+    srs_utime_t cto = SRS_EDGE_INGESTER_TIMEOUT;
+    srs_utime_t sto = SRS_CONSTS_RTMP_PULSE;
     sdk = new SrsSimpleRtmpClient(url, cto, sto);
     
     if ((err = sdk->connect()) != srs_success) {
-        return srs_error_wrap(err, "edge pull %s failed, cto=%" PRId64 ", sto=%" PRId64, url.c_str(), cto, sto);
+        return srs_error_wrap(err, "edge pull %s failed, cto=%dms, sto=%dms.", url.c_str(), srsu2msi(cto), srsu2msi(sto));
     }
     
-    if ((err = sdk->play()) != srs_success) {
+    if ((err = sdk->play(_srs_config->get_chunk_size(req->vhost))) != srs_success) {
         return srs_error_wrap(err, "edge pull %s stream failed", url.c_str());
     }
     
@@ -144,7 +147,13 @@ void SrsEdgeRtmpUpstream::close()
     srs_freep(sdk);
 }
 
-void SrsEdgeRtmpUpstream::set_recv_timeout(int64_t tm)
+void SrsEdgeRtmpUpstream::selected(string& server, int& port)
+{
+    server = selected_ip;
+    port = selected_port;
+}
+
+void SrsEdgeRtmpUpstream::set_recv_timeout(srs_utime_t tm)
 {
     sdk->set_recv_timeout(tm);
 }
@@ -160,7 +169,7 @@ SrsEdgeIngester::SrsEdgeIngester()
     edge = NULL;
     req = NULL;
     
-    upstream = new SrsEdgeRtmpUpstream(redirect);
+    upstream = new SrsEdgeRtmpUpstream("");
     lb = new SrsLbRoundRobin();
     trd = new SrsDummyCoroutine();
 }
@@ -218,7 +227,7 @@ string SrsEdgeIngester::get_curr_origin()
 }
 
 // when error, edge ingester sleep for a while and retry.
-#define SRS_EDGE_INGESTER_CIMS (3*1000)
+#define SRS_EDGE_INGESTER_CIMS (3 * SRS_UTIME_SECONDS)
 
 srs_error_t SrsEdgeIngester::cycle()
 {
@@ -234,7 +243,7 @@ srs_error_t SrsEdgeIngester::cycle()
             return srs_error_wrap(err, "edge ingester");
         }
         
-        srs_usleep(SRS_EDGE_INGESTER_CIMS * 1000);
+        srs_usleep(SRS_EDGE_INGESTER_CIMS);
     }
     
     return err;
@@ -243,7 +252,8 @@ srs_error_t SrsEdgeIngester::cycle()
 srs_error_t SrsEdgeIngester::do_cycle()
 {
     srs_error_t err = srs_success;
-    
+
+    std::string redirect;
     while (true) {
         if ((err = trd->pull()) != srs_success) {
             return srs_error_wrap(err, "do cycle pull");
@@ -251,10 +261,6 @@ srs_error_t SrsEdgeIngester::do_cycle()
         
         srs_freep(upstream);
         upstream = new SrsEdgeRtmpUpstream(redirect);
-        
-        // we only use the redict once.
-        // reset the redirect to empty, for maybe the origin changed.
-        redirect = "";
         
         if ((err = source->on_source_id_changed(_srs_context->get_id())) != srs_success) {
             return srs_error_wrap(err, "on source id changed");
@@ -267,11 +273,21 @@ srs_error_t SrsEdgeIngester::do_cycle()
         if ((err = edge->on_ingest_play()) != srs_success) {
             return srs_error_wrap(err, "notify edge play");
         }
+
+        // set to larger timeout to read av data from origin.
+        upstream->set_recv_timeout(SRS_EDGE_INGESTER_TIMEOUT);
         
-        err = ingest();
+        err = ingest(redirect);
         
         // retry for rtmp 302 immediately.
         if (srs_error_code(err) == ERROR_CONTROL_REDIRECT) {
+            int port;
+            string server;
+            upstream->selected(server, port);
+
+            string url = req->get_stream_url();
+            srs_warn("RTMP redirect %s from %s:%d to %s", url.c_str(), server.c_str(), port, redirect.c_str());
+
             srs_error_reset(err);
             continue;
         }
@@ -286,15 +302,16 @@ srs_error_t SrsEdgeIngester::do_cycle()
     return err;
 }
 
-srs_error_t SrsEdgeIngester::ingest()
+srs_error_t SrsEdgeIngester::ingest(string& redirect)
 {
     srs_error_t err = srs_success;
     
     SrsPithyPrint* pprint = SrsPithyPrint::create_edge();
     SrsAutoFree(SrsPithyPrint, pprint);
-    
-    // set to larger timeout to read av data from origin.
-    upstream->set_recv_timeout(SRS_EDGE_INGESTER_TMMS);
+
+    // we only use the redict once.
+    // reset the redirect to empty, for maybe the origin changed.
+    redirect = "";
     
     while (true) {
         srs_error_t err = srs_success;
@@ -318,7 +335,7 @@ srs_error_t SrsEdgeIngester::ingest()
         srs_assert(msg);
         SrsAutoFree(SrsCommonMessage, msg);
         
-        if ((err = process_publish_message(msg)) != srs_success) {
+        if ((err = process_publish_message(msg, redirect)) != srs_success) {
             return srs_error_wrap(err, "process message");
         }
     }
@@ -326,7 +343,7 @@ srs_error_t SrsEdgeIngester::ingest()
     return err;
 }
 
-srs_error_t SrsEdgeIngester::process_publish_message(SrsCommonMessage* msg)
+srs_error_t SrsEdgeIngester::process_publish_message(SrsCommonMessage* msg, string& redirect)
 {
     srs_error_t err = srs_success;
     
@@ -433,7 +450,7 @@ SrsEdgeForwarder::~SrsEdgeForwarder()
     srs_freep(queue);
 }
 
-void SrsEdgeForwarder::set_queue_size(double queue_size)
+void SrsEdgeForwarder::set_queue_size(srs_utime_t queue_size)
 {
     return queue->set_queue_size(queue_size);
 }
@@ -469,29 +486,30 @@ srs_error_t SrsEdgeForwarder::start()
         std::string vhost = _srs_config->get_vhost_edge_transform_vhost(req->vhost);
         vhost = srs_string_replace(vhost, "[vhost]", req->vhost);
         
-        url = srs_generate_rtmp_url(server, port, vhost, req->app, req->stream);
+        url = srs_generate_rtmp_url(server, port, req->host, vhost, req->app, req->stream, req->param);
     }
     
     // open socket.
     srs_freep(sdk);
-    int64_t cto = SRS_EDGE_FORWARDER_TMMS;
-    int64_t sto = SRS_CONSTS_RTMP_TMMS;
+    srs_utime_t cto = SRS_EDGE_FORWARDER_TIMEOUT;
+    srs_utime_t sto = SRS_CONSTS_RTMP_TIMEOUT;
     sdk = new SrsSimpleRtmpClient(url, cto, sto);
     
     if ((err = sdk->connect()) != srs_success) {
-        return srs_error_wrap(err, "sdk connect %s failed, cto=%" PRId64 ", sto=%" PRId64, url.c_str(), cto, sto);
+        return srs_error_wrap(err, "sdk connect %s failed, cto=%dms, sto=%dms.", url.c_str(), srsu2msi(cto), srsu2msi(sto));
     }
     
-    if ((err = sdk->publish()) != srs_success) {
+    if ((err = sdk->publish(_srs_config->get_chunk_size(req->vhost))) != srs_success) {
         return srs_error_wrap(err, "sdk publish");
     }
     
     srs_freep(trd);
-    trd = new SrsSTCoroutine("edge-fwr", this);
+    trd = new SrsSTCoroutine("edge-fwr", this, _srs_context->get_id());
     
     if ((err = trd->start()) != srs_success) {
         return srs_error_wrap(err, "coroutine");
     }
+    srs_trace("edge-fwr publish url %s", url.c_str());
     
     return err;
 }
@@ -504,7 +522,7 @@ void SrsEdgeForwarder::stop()
 }
 
 // when error, edge ingester sleep for a while and retry.
-#define SRS_EDGE_FORWARDER_CIMS (3*1000)
+#define SRS_EDGE_FORWARDER_CIMS (3 * SRS_UTIME_SECONDS)
 
 srs_error_t SrsEdgeForwarder::cycle()
 {
@@ -519,7 +537,7 @@ srs_error_t SrsEdgeForwarder::cycle()
             return srs_error_wrap(err, "thread pull");
         }
     
-        srs_usleep(SRS_EDGE_FORWARDER_CIMS * 1000);
+        srs_usleep(SRS_EDGE_FORWARDER_CIMS);
     }
     
     return err;
@@ -531,7 +549,7 @@ srs_error_t SrsEdgeForwarder::do_cycle()
 {
     srs_error_t err = srs_success;
     
-    sdk->set_recv_timeout(SRS_CONSTS_RTMP_PULSE_TMMS);
+    sdk->set_recv_timeout(SRS_CONSTS_RTMP_PULSE);
     
     SrsPithyPrint* pprint = SrsPithyPrint::create_edge();
     SrsAutoFree(SrsPithyPrint, pprint);
@@ -544,7 +562,7 @@ srs_error_t SrsEdgeForwarder::do_cycle()
         }
         
         if (send_error_code != ERROR_SUCCESS) {
-            srs_usleep(SRS_EDGE_FORWARDER_TMMS * 1000);
+            srs_usleep(SRS_EDGE_FORWARDER_TIMEOUT);
             continue;
         }
         
@@ -708,7 +726,7 @@ SrsPublishEdge::~SrsPublishEdge()
     srs_freep(forwarder);
 }
 
-void SrsPublishEdge::set_queue_size(double queue_size)
+void SrsPublishEdge::set_queue_size(srs_utime_t queue_size)
 {
     return forwarder->set_queue_size(queue_size);
 }

@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2013-2018 Winlin
+ * Copyright (c) 2013-2019 Winlin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -236,7 +236,7 @@ void srs_update_system_rusage()
         return;
     }
     
-    _srs_system_rusage.sample_time = srs_get_system_time_ms();
+    _srs_system_rusage.sample_time = srsu2ms(srs_get_system_time());
     
     _srs_system_rusage.ok = true;
 }
@@ -362,7 +362,6 @@ bool get_proc_system_stat(SrsProcSystemStat& r)
     fclose(f);
 #else
     // TODO: FIXME: impelments it.
-    // Fuck all of you who use osx for a long time and never patch the osx features for srs.
 #endif
     
     r.ok = true;
@@ -401,7 +400,6 @@ bool get_proc_self_stat(SrsProcSelfStat& r)
     fclose(f);
 #else
     // TODO: FIXME: impelments it.
-    // Fuck all of you who use osx for a long time and never patch the osx features for srs.
 #endif
     
     r.ok = true;
@@ -427,7 +425,7 @@ void srs_update_proc_stat()
             return;
         }
         
-        r.sample_time = srs_get_system_time_ms();
+        r.sample_time = srsu2ms(srs_get_system_time());
         
         // calc usage in percent
         SrsProcSystemStat& o = _srs_system_cpu_system_stat;
@@ -453,7 +451,7 @@ void srs_update_proc_stat()
             return;
         }
         
-        r.sample_time = srs_get_system_time_ms();
+        r.sample_time = srsu2ms(srs_get_system_time());
         
         // calc usage in percent
         SrsProcSelfStat& o = _srs_system_cpu_self_stat;
@@ -505,7 +503,7 @@ bool srs_get_disk_vmstat_stat(SrsDiskStat& r)
         return false;
     }
     
-    r.sample_time = srs_get_system_time_ms();
+    r.sample_time = srsu2ms(srs_get_system_time());
     
     static char buf[1024];
     while (fgets(buf, sizeof(buf), f)) {
@@ -520,7 +518,6 @@ bool srs_get_disk_vmstat_stat(SrsDiskStat& r)
     fclose(f);
 #else
     // TODO: FIXME: impelments it.
-    // Fuck all of you who use osx for a long time and never patch the osx features for srs.
 #endif
     
     r.ok = true;
@@ -531,7 +528,7 @@ bool srs_get_disk_vmstat_stat(SrsDiskStat& r)
 bool srs_get_disk_diskstats_stat(SrsDiskStat& r)
 {
     r.ok = true;
-    r.sample_time = srs_get_system_time_ms();
+    r.sample_time = srsu2ms(srs_get_system_time());
     
     // if disabled, ignore all devices.
     SrsConfDirective* conf = _srs_config->get_stats_disk_device();
@@ -606,7 +603,6 @@ bool srs_get_disk_diskstats_stat(SrsDiskStat& r)
     fclose(f);
 #else
     // TODO: FIXME: impelments it.
-    // Fuck all of you who use osx for a long time and never patch the osx features for srs.
 #endif
     
     r.ok = true;
@@ -728,10 +724,9 @@ void srs_update_meminfo()
     fclose(f);
 #else
     // TODO: FIXME: impelments it.
-    // Fuck all of you who use osx for a long time and never patch the osx features for srs.
 #endif
     
-    r.sample_time = srs_get_system_time_ms();
+    r.sample_time = srsu2ms(srs_get_system_time());
     r.MemActive = r.MemTotal - r.MemFree;
     r.RealInUse = r.MemActive - r.Buffers - r.Cached;
     r.NotInUse = r.MemTotal - r.RealInUse;
@@ -795,7 +790,7 @@ void srs_update_platform_info()
 {
     SrsPlatformInfo& r = _srs_system_platform_info;
     
-    r.srs_startup_time = srs_get_system_startup_time_ms();
+    r.srs_startup_time = srsu2ms(srs_get_system_startup_time());
     
 #ifndef SRS_OSX
     if (true) {
@@ -940,7 +935,7 @@ void srs_update_network_devices()
             _nb_srs_system_network_devices = i + 1;
             srs_info("scan network device ifname=%s, total=%d", r.name, _nb_srs_system_network_devices);
             
-            r.sample_time = srs_get_system_time_ms();
+            r.sample_time = srsu2ms(srs_get_system_time());
             r.ok = true;
         }
         
@@ -948,7 +943,6 @@ void srs_update_network_devices()
     }
 #else
     // TODO: FIXME: impelments it.
-    // Fuck all of you who use osx for a long time and never patch the osx features for srs.
 #endif
 }
 
@@ -1029,7 +1023,6 @@ void srs_update_rtmp_server(int nb_conn, SrsKbps* kbps)
     }
 #else
     // TODO: FIXME: impelments it.
-    // Fuck all of you who use osx for a long time and never patch the osx features for srs.
     nb_socks = 0;
     nb_tcp4_hashed = 0;
     nb_tcp_orphans = 0;
@@ -1073,7 +1066,6 @@ void srs_update_rtmp_server(int nb_conn, SrsKbps* kbps)
     }
 #else
     // TODO: FIXME: impelments it.
-    // Fuck all of you who use osx for a long time and never patch the osx features for srs.
 #endif
     
     // @see: https://github.com/shemminger/iproute2/blob/master/misc/ss.c
@@ -1090,7 +1082,7 @@ void srs_update_rtmp_server(int nb_conn, SrsKbps* kbps)
         r.ok = true;
         
         r.nb_conn_srs = nb_conn;
-        r.sample_time = srs_get_system_time_ms();
+        r.sample_time = srsu2ms(srs_get_system_time());
         
         r.rbytes = kbps->get_recv_bytes();
         r.rkbps = kbps->get_recv_kbps();
@@ -1199,7 +1191,7 @@ void srs_api_dump_summaries(SrsJsonObject* obj)
         self_mem_percent = (float)(r->r.ru_maxrss / (double)m->MemTotal);
     }
     
-    int64_t now = srs_get_system_time_ms();
+    int64_t now = srsu2ms(srs_get_system_time());
     double srs_uptime = (now - p->srs_startup_time) / 100 / 10.0;
     
     int64_t n_sample_time = 0;

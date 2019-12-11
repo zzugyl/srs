@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2013-2018 Winlin
+ * Copyright (c) 2013-2019 Winlin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -68,7 +68,7 @@ srs_error_t SrsHttpParser::initialize(enum http_parser_type type, bool allow_jso
     return err;
 }
 
-srs_error_t SrsHttpParser::parse_message(ISrsProtocolReaderWriter* io, SrsConnection* conn, ISrsHttpMessage** ppmsg)
+srs_error_t SrsHttpParser::parse_message(ISrsReader* reader, ISrsHttpMessage** ppmsg)
 {
     *ppmsg = NULL;
     
@@ -82,15 +82,15 @@ srs_error_t SrsHttpParser::parse_message(ISrsProtocolReaderWriter* io, SrsConnec
     header = http_parser();
     url = "";
     headers.clear();
-    header_parsed = 0;
+    pbody = NULL;
     
     // do parse
-    if ((err = parse_message_imp(io)) != srs_success) {
+    if ((err = parse_message_imp(reader)) != srs_success) {
         return srs_error_wrap(err, "parse message");
     }
     
     // create msg
-    SrsHttpMessage* msg = new SrsHttpMessage(io, conn);
+    SrsHttpMessage* msg = new SrsHttpMessage(reader);
     
     // initalize http msg, parse url.
     if ((err = msg->update(url, jsonp, &header, buffer, headers)) != srs_success) {
@@ -104,43 +104,37 @@ srs_error_t SrsHttpParser::parse_message(ISrsProtocolReaderWriter* io, SrsConnec
     return err;
 }
 
-srs_error_t SrsHttpParser::parse_message_imp(ISrsProtocolReaderWriter* io)
+srs_error_t SrsHttpParser::parse_message_imp(ISrsReader* reader)
 {
     srs_error_t err = srs_success;
     
     while (true) {
-        ssize_t nparsed = 0;
-        
-        // when got entire http header, parse it.
-        // @see https://github.com/ossrs/srs/issues/400
-        char* start = buffer->bytes();
-        char* end = start + buffer->size();
-        for (char* p = start; p <= end - 4; p++) {
-            // SRS_HTTP_CRLFCRLF "\r\n\r\n" // 0x0D0A0D0A
-            if (p[0] == SRS_CONSTS_CR && p[1] == SRS_CONSTS_LF && p[2] == SRS_CONSTS_CR && p[3] == SRS_CONSTS_LF) {
-                nparsed = http_parser_execute(&parser, &settings, buffer->bytes(), buffer->size());
-                srs_info("buffer=%d, nparsed=%d, header=%d", buffer->size(), (int)nparsed, header_parsed);
-                break;
-            }
-        }
-        
-        // consume the parsed bytes.
-        if (nparsed && header_parsed) {
-            buffer->read_slice(header_parsed);
-        }
-        
-        // ok atleast header completed,
-        // never wait for body completed, for maybe chunked.
-        if (state == SrsHttpParseStateHeaderComplete || state == SrsHttpParseStateMessageComplete) {
-            break;
+        if (buffer->size() > 0) {
+            ssize_t nparsed = http_parser_execute(&parser, &settings, buffer->bytes(), buffer->size());
+	        if (buffer->size() != nparsed) {
+	            return srs_error_new(ERROR_HTTP_PARSE_HEADER, "parse failed, nparsed=%d, size=%d", nparsed, buffer->size());
+	        }
+
+			// The consumed size, does not include the body.
+	        ssize_t consumed = nparsed;
+	        if (pbody && buffer->bytes() < pbody) {
+	           consumed = pbody - buffer->bytes();
+	        }
+            srs_info("size=%d, nparsed=%d, consumed=%d", buffer->size(), (int)nparsed, consumed);
+
+	        // Only consume the header bytes.
+            buffer->read_slice(consumed);
+
+	        // Done when header completed, never wait for body completed, because it maybe chunked.
+	        if (state >= SrsHttpParseStateHeaderComplete) {
+	            break;
+	        }
         }
         
         // when nothing parsed, read more to parse.
-        if (nparsed == 0) {
-            // when requires more, only grow 1bytes, but the buffer will cache more.
-            if ((err = buffer->grow(io, buffer->size() + 1)) != srs_success) {
-                return srs_error_wrap(err, "grow buffer");
-            }
+        // when requires more, only grow 1bytes, but the buffer will cache more.
+        if ((err = buffer->grow(reader, buffer->size() + 1)) != srs_success) {
+            return srs_error_wrap(err, "grow buffer");
         }
     }
     
@@ -172,8 +166,7 @@ int SrsHttpParser::on_headers_complete(http_parser* parser)
     obj->header = *parser;
     // save the parser when header parse completed.
     obj->state = SrsHttpParseStateHeaderComplete;
-    obj->header_parsed = (int)parser->nread;
-    
+
     srs_info("***HEADERS COMPLETE***");
     
     // see http_parser.c:1570, return 1 to skip body.
@@ -248,20 +241,26 @@ int SrsHttpParser::on_body(http_parser* parser, const char* at, size_t length)
 {
     SrsHttpParser* obj = (SrsHttpParser*)parser->data;
     srs_assert(obj);
+
+    // save the parser when body parsed.
+    obj->state = SrsHttpParseStateBody;
+
+    // Save the body position.
+    obj->pbody = at;
     
     srs_info("Body: %.*s", (int)length, at);
     
     return 0;
 }
 
-SrsHttpMessage::SrsHttpMessage(ISrsProtocolReaderWriter* io, SrsConnection* c) : ISrsHttpMessage()
+SrsHttpMessage::SrsHttpMessage(ISrsReader* reader) : ISrsHttpMessage()
 {
-    conn = c;
+    owner_conn = NULL;
     chunked = false;
     infinite_chunked = false;
     keep_alive = true;
     _uri = new SrsHttpUri();
-    _body = new SrsHttpResponseReader(this, io);
+    _body = new SrsHttpResponseReader(this, reader);
     _http_ts_send_buffer = new char[SRS_HTTP_TS_SEND_BUFFER_SIZE];
     jsonp = false;
 }
@@ -329,7 +328,12 @@ srs_error_t SrsHttpMessage::update(string url, bool allow_jsonp, http_parser* he
 
 SrsConnection* SrsHttpMessage::connection()
 {
-    return conn;
+    return owner_conn;
+}
+
+void SrsHttpMessage::set_connection(SrsConnection* conn)
+{
+    owner_conn = conn;
 }
 
 uint8_t SrsHttpMessage::method()
@@ -588,6 +592,11 @@ SrsRequest* SrsHttpMessage::to_request(string vhost)
     req->tcUrl = "rtmp://" + vhost + "/" + req->app;
     req->pageUrl = get_request_header("Referer");
     req->objectEncoding = 0;
+
+    std::string query = _uri->get_query();
+    if (!query.empty()) {
+        req->tcUrl = req->tcUrl + "?" + query;
+    }
     
     srs_discovery_tc_url(req->tcUrl, req->schema, req->host, req->vhost, req->app, req->stream, req->port, req->param);
     req->strip();
@@ -842,9 +851,9 @@ srs_error_t SrsHttpResponseWriter::send_header(char* data, int size)
     return skt->write((void*)buf.c_str(), buf.length(), NULL);
 }
 
-SrsHttpResponseReader::SrsHttpResponseReader(SrsHttpMessage* msg, ISrsProtocolReaderWriter* io)
+SrsHttpResponseReader::SrsHttpResponseReader(SrsHttpMessage* msg, ISrsReader* reader)
 {
-    skt = io;
+    skt = reader;
     owner = msg;
     is_eof = false;
     nb_total_read = 0;

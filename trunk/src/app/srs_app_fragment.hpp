@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2013-2018 Winlin
+ * Copyright (c) 2013-2019 Winlin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -29,19 +29,17 @@
 #include <string>
 #include <vector>
 
-/**
- * Represent a fragment, such as HLS segment, DVR segment or DASH segment.
- * It's a media file, for example FLV or MP4, with duration.
- */
+// Represent a fragment, such as HLS segment, DVR segment or DASH segment.
+// It's a media file, for example FLV or MP4, with duration.
 class SrsFragment
 {
 private:
-    // The duration in ms.
-    int64_t dur;
+    // The duration in srs_utime_t.
+    srs_utime_t dur;
     // The full file path of fragment.
     std::string filepath;
-    // The start DTS in ms of segment.
-    int64_t start_dts;
+    // The start DTS in srs_utime_t of segment.
+    srs_utime_t start_dts;
     // Whether current segement contains sequence header.
     bool sequence_header;
 public:
@@ -51,8 +49,8 @@ public:
     // Append a frame with dts into fragment.
     // @dts The dts of frame in ms.
     virtual void append(int64_t dts);
-    // Get the duration of fragment in ms.
-    virtual int64_t duration();
+    // Get the duration of fragment in srs_utime_t.
+    virtual srs_utime_t duration();
     // Whether the fragment contains any sequence header.
     virtual bool is_sequence_header();
     // Set whether contains sequence header.
@@ -75,9 +73,7 @@ public:
     virtual srs_error_t rename();
 };
 
-/**
- * The fragment window manage a series of fragment.
- */
+// The fragment window manage a series of fragment.
 class SrsFragmentWindow
 {
 private:
@@ -93,11 +89,11 @@ public:
     // Append a new fragment, which is ready to delivery to client.
     virtual void append(SrsFragment* fragment);
     // Shrink the window, push the expired fragment to a queue.
-    virtual void shrink(int64_t window);
+    virtual void shrink(srs_utime_t window);
     // Clear the expired fragments.
     virtual void clear_expired(bool delete_files);
-    // Get the max duration in ms of all fragments.
-    virtual int64_t max_duration();
+    // Get the max duration in srs_utime_t of all fragments.
+    virtual srs_utime_t max_duration();
 public:
     virtual bool empty();
     virtual SrsFragment* first();

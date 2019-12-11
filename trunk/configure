@@ -101,7 +101,16 @@ SrsGprof=""; SrsGprofLink=""; if [ $SRS_GPROF = YES ]; then SrsGprof=" -pg -lc_p
 SrsGperf=""; SrsGperfLink=""; if [ $SRS_GPERF = YES ]; then SrsGperfLink=" -lpthread"; fi
 # the cxx flag generated.
 CXXFLAGS="${CXXFLAGS} ${CppStd}${WarnLevel}${GDBDebug}${LibraryCompile}${SrsGprof}"
-if [ $SRS_GPERF = YES ]; then CXXFLAGS="${CXXFLAGS} -fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free"; fi
+if [ $SRS_GPERF = YES ]; then
+    CXXFLAGS="${CXXFLAGS} -fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free";
+fi
+# For coverage.
+if [[ $SRS_GCOV == YES ]]; then
+    SrsGcov="-fprofile-arcs -ftest-coverage"
+fi
+if [[ $SRS_GCOV == YES ]]; then
+    CXXFLAGS="${CXXFLAGS} ${SrsGcov}";
+fi
 # Start to generate the Makefile.
 cat << END > ${SRS_OBJS}/${SRS_MAKEFILE}
 GCC = gcc
@@ -126,19 +135,35 @@ END
 LibSTRoot="${SRS_OBJS_DIR}/st"; LibSTfile="${LibSTRoot}/libst.a"
 # openssl-1.1.0e, for the RTMP complex handshake.
 LibSSLRoot="";LibSSLfile=""
-if [ $SRS_SSL = YES ]; then if [ $SRS_USE_SYS_SSL = NO ]; then LibSSLRoot="${SRS_OBJS_DIR}/openssl/include"; LibSSLfile="${SRS_OBJS_DIR}/openssl/lib/libssl.a ${SRS_OBJS_DIR}/openssl/lib/libcrypto.a"; fi fi
+if [[ $SRS_SSL == YES && $SRS_USE_SYS_SSL == NO ]]; then
+    LibSSLRoot="${SRS_OBJS_DIR}/openssl/include"; LibSSLfile="${SRS_OBJS_DIR}/openssl/lib/libssl.a ${SRS_OBJS_DIR}/openssl/lib/libcrypto.a";
+fi
 # gperftools-2.1, for mem check and mem/cpu profile
 LibGperfRoot=""; LibGperfFile=""
-if [ $SRS_GPERF = YES ]; then LibGperfRoot="${SRS_OBJS_DIR}/gperf/include"; LibGperfFile="${SRS_OBJS_DIR}/gperf/lib/libtcmalloc_and_profiler.a"; fi
-if [ $SRS_GPERF_MD = YES ]; then LibGperfFile="${SRS_OBJS_DIR}/gperf/lib/libtcmalloc_debug.a"; fi
+if [ $SRS_GPERF = YES ]; then
+    LibGperfRoot="${SRS_OBJS_DIR}/gperf/include"; LibGperfFile="${SRS_OBJS_DIR}/gperf/lib/libtcmalloc_and_profiler.a";
+fi
+if [ $SRS_GPERF_MD = YES ]; then
+    LibGperfFile="${SRS_OBJS_DIR}/gperf/lib/libtcmalloc_debug.a";
+fi
 # the link options, always use static link
 SrsLinkOptions="-ldl";
-if [ $SRS_SSL = YES ]; then if [ $SRS_USE_SYS_SSL = YES ]; then SrsLinkOptions="${SrsLinkOptions} -lssl -lcrypto"; fi fi
+if [[ $SRS_SSL == YES && $SRS_USE_SYS_SSL == YES ]]; then
+    SrsLinkOptions="${SrsLinkOptions} -lssl -lcrypto";
+fi
 # if static specified, add static
 # TODO: FIXME: remove static.
-if [ $SRS_STATIC = YES ]; then SrsLinkOptions="${SrsLinkOptions} -static"; fi
+if [ $SRS_STATIC = YES ]; then
+    SrsLinkOptions="${SrsLinkOptions} -static";
+fi
 # if mips, add -lgcc_eh, or stl compile failed.
-if [ $SRS_MIPS_UBUNTU12 = YES ]; then SrsLinkOptions="${SrsLinkOptions} -lgcc_eh"; fi
+if [ $SRS_MIPS_UBUNTU12 = YES ]; then
+    SrsLinkOptions="${SrsLinkOptions} -lgcc_eh";
+fi
+# For coverage.
+if [[ $SRS_GCOV == YES ]]; then
+    SrsLinkOptions="${SrsLinkOptions} ${SrsGcov}";
+fi
 
 #####################################################################################
 # Modules, compile each module, then link to binary
@@ -147,14 +172,15 @@ if [ $SRS_MIPS_UBUNTU12 = YES ]; then SrsLinkOptions="${SrsLinkOptions} -lgcc_eh
 MODULE_ID="CORE"
 MODULE_DEPENDS=()
 ModuleLibIncs=(${SRS_OBJS_DIR})
-MODULE_FILES=("srs_core" "srs_core_autofree" "srs_core_performance" "srs_core_mem_watch")
+MODULE_FILES=("srs_core" "srs_core_autofree" "srs_core_performance"
+		"srs_core_mem_watch" "srs_core_time")
 CORE_INCS="src/core"; MODULE_DIR=${CORE_INCS} . auto/modules.sh
 CORE_OBJS="${MODULE_OBJS[@]}"
 #
 #Kernel, depends on core, provides error/log/config, nothing about stream information.
 MODULE_ID="KERNEL" 
 MODULE_DEPENDS=("CORE") 
-ModuleLibIncs=(${SRS_OBJS_DIR})
+ModuleLibIncs=(${SRS_OBJS_DIR} ${LibSSLRoot})
 MODULE_FILES=("srs_kernel_error" "srs_kernel_log" "srs_kernel_buffer"
         "srs_kernel_utility" "srs_kernel_flv" "srs_kernel_codec" "srs_kernel_io"
         "srs_kernel_consts" "srs_kernel_aac" "srs_kernel_mp3" "srs_kernel_ts"
@@ -169,7 +195,7 @@ ModuleLibIncs=(${SRS_OBJS_DIR} ${LibSSLRoot})
 MODULE_FILES=("srs_protocol_amf0" "srs_protocol_io" "srs_rtmp_stack"
         "srs_rtmp_handshake" "srs_protocol_utility" "srs_rtmp_msg_array" "srs_protocol_stream"
         "srs_raw_avc" "srs_rtsp_stack" "srs_http_stack" "srs_protocol_kbps" "srs_protocol_json"
-        "srs_kafka_stack" "srs_protocol_format")
+        "srs_protocol_format")
 PROTOCOL_INCS="src/protocol"; MODULE_DIR=${PROTOCOL_INCS} . auto/modules.sh
 PROTOCOL_OBJS="${MODULE_OBJS[@]}"
 #
@@ -177,7 +203,7 @@ PROTOCOL_OBJS="${MODULE_OBJS[@]}"
 if [ $SRS_EXPORT_LIBRTMP_PROJECT = NO ]; then
     MODULE_ID="SERVICE"
     MODULE_DEPENDS=("CORE" "KERNEL" "PROTOCOL")
-    ModuleLibIncs=(${LibSTRoot} ${SRS_OBJS_DIR})
+    ModuleLibIncs=(${LibSTRoot} ${SRS_OBJS_DIR} ${LibSSLRoot})
     MODULE_FILES=("srs_service_log" "srs_service_st" "srs_service_http_client"
         "srs_service_http_conn" "srs_service_rtmp_conn" "srs_service_utility"
         "srs_service_conn")
@@ -190,7 +216,7 @@ fi
 if [ $SRS_EXPORT_LIBRTMP_PROJECT = NO ]; then
     MODULE_ID="APP" 
     MODULE_DEPENDS=("CORE" "KERNEL" "PROTOCOL" "SERVICE")
-    ModuleLibIncs=(${LibSTRoot} ${SRS_OBJS_DIR})
+    ModuleLibIncs=(${LibSTRoot} ${SRS_OBJS_DIR} ${LibSSLRoot})
     MODULE_FILES=("srs_app_server" "srs_app_conn" "srs_app_rtmp_conn" "srs_app_source" 
             "srs_app_refer" "srs_app_hls" "srs_app_forward" "srs_app_encoder" "srs_app_http_stream"
             "srs_app_thread" "srs_app_bandwidth" "srs_app_st" "srs_app_log" "srs_app_config" 
@@ -199,7 +225,7 @@ if [ $SRS_EXPORT_LIBRTMP_PROJECT = NO ]; then
             "srs_app_heartbeat" "srs_app_empty" "srs_app_http_client" "srs_app_http_static"
             "srs_app_recv_thread" "srs_app_security" "srs_app_statistic" "srs_app_hds"
             "srs_app_mpegts_udp" "srs_app_rtsp" "srs_app_listener" "srs_app_async_call"
-            "srs_app_caster_flv" "srs_app_process" "srs_app_ng_exec" "srs_app_kafka"
+            "srs_app_caster_flv" "srs_app_process" "srs_app_ng_exec"
             "srs_app_hourglass" "srs_app_dash" "srs_app_fragment" "srs_app_dvr"
             "srs_app_coworkers")
     DEFINES=""
@@ -225,7 +251,7 @@ LIBS_OBJS="${MODULE_OBJS[@]}"
 if [ $SRS_EXPORT_LIBRTMP_PROJECT = NO ]; then
     MODULE_ID="SERVER"
     MODULE_DEPENDS=("CORE" "KERNEL" "PROTOCOL" "SERVICE" "APP")
-    ModuleLibIncs=(${LibSTRoot} ${SRS_OBJS_DIR} ${LibGperfRoot})
+    ModuleLibIncs=(${LibSTRoot} ${SRS_OBJS_DIR} ${LibGperfRoot} ${LibSSLRoot})
     MODULE_FILES=("srs_main_server")
     SERVER_INCS="src/main"; MODULE_DIR=${SERVER_INCS} . auto/modules.sh
     SERVER_OBJS="${MODULE_OBJS[@]}"
@@ -235,7 +261,7 @@ fi
 if [ $SRS_EXPORT_LIBRTMP_PROJECT = NO ]; then
     MODULE_ID="MAIN"
     MODULE_DEPENDS=("CORE" "KERNEL" "PROTOCOL" "SERVICE")
-    ModuleLibIncs=(${LibSTRoot} ${SRS_OBJS_DIR} ${LibGperfRoot})
+    ModuleLibIncs=(${LibSTRoot} ${SRS_OBJS_DIR} ${LibGperfRoot} ${LibSSLRoot})
     MODULE_FILES=()
     DEFINES=""
     # add each modules for main
@@ -288,9 +314,8 @@ fi
 #
 # utest, the unit-test cases of srs, base on gtest1.6
 if [ $SRS_UTEST = YES ]; then
-    MODULE_FILES=("srs_utest" "srs_utest_amf0" "srs_utest_protocol" 
-            "srs_utest_kernel" "srs_utest_core" "srs_utest_config" 
-            "srs_utest_reload")
+    MODULE_FILES=("srs_utest" "srs_utest_amf0" "srs_utest_protocol" "srs_utest_kernel" "srs_utest_core"
+        "srs_utest_config" "srs_utest_protostack" "srs_utest_reload" "srs_utest_service" "srs_utest_app")
     ModuleLibIncs=(${SRS_OBJS_DIR} ${LibSTRoot} ${LibSSLRoot})
     ModuleLibFiles=(${LibSTfile} ${LibSSLfile})
     MODULE_DEPENDS=("CORE" "KERNEL" "PROTOCOL" "SERVICE" "APP")
@@ -458,22 +483,30 @@ install:
 	@mkdir -p \$(__REAL_INSTALL)
 	@echo "Now make the http root dir"
 	@mkdir -p \$(__REAL_INSTALL)/objs/nginx/html
-	@cp research/api-server/static-dir/crossdomain.xml \$(__REAL_INSTALL)/objs/nginx/html
+	@cp -f research/api-server/static-dir/crossdomain.xml \$(__REAL_INSTALL)/objs/nginx/html
 	@echo "Now copy binary files"
 	@mkdir -p \$(__REAL_INSTALL)/objs
-	@cp objs/srs \$(__REAL_INSTALL)/objs
+	@cp -f objs/srs \$(__REAL_INSTALL)/objs
 	@echo "Now copy srs conf files"
 	@mkdir -p \$(__REAL_INSTALL)/conf
-	@cp conf/*.conf \$(__REAL_INSTALL)/conf
+	@cp -f conf/*.conf \$(__REAL_INSTALL)/conf
 	@echo "Now copy init.d script files"
 	@mkdir -p \$(__REAL_INSTALL)/etc/init.d
-	@cp etc/init.d/srs \$(__REAL_INSTALL)/etc/init.d
+	@cp -f etc/init.d/srs \$(__REAL_INSTALL)/etc/init.d
 	@sed -i "s|^ROOT=.*|ROOT=\"\$(SRS_PREFIX)\"|g" \$(__REAL_INSTALL)/etc/init.d/srs
+	@echo "Now copy systemctl service files"
+	@mkdir -p \$(__REAL_INSTALL)/usr/lib/systemd/system
+	@cp -f usr/lib/systemd/system/srs.service \$(__REAL_INSTALL)/usr/lib/systemd/system/srs.service
 	@echo ""
-	@echo "SRS is installed, to link and start srs:"
-	@echo "     sudo ln -sf \$(SRS_PREFIX)/etc/init.d/srs /etc/init.d/srs"
+	@echo "The api installed, to link and start srs, please"
+	@echo "For CentOS6:"
+	@echo "     sudo ln -sf \$(SRS_PREFIX)/etc/init.d/srs /etc/init.d/srs &&"
 	@echo "     /etc/init.d/srs start"
-	@echo "@see: https://github.com/ossrs/srs/wiki/v1_CN_LinuxService"
+	@echo "For CentOS7:"
+	@echo "     sudo ln -sf \$(SRS_PREFIX)/etc/init.d/srs /etc/init.d/srs &&"
+	@echo "     sudo cp -f \$(SRS_PREFIX)/usr/lib/systemd/system/srs.service /usr/lib/systemd/system/srs.service && sudo systemctl daemon-reload && sudo systemctl enable srs &&"
+	@echo "     sudo systemctl start srs"
+	@echo "@see: https://github.com/ossrs/srs/wiki/v3_CN_LinuxService"
 
 END
 fi
@@ -485,7 +518,7 @@ librtmp: server
 	@echo "Building the client publish/play library."
 	\$(MAKE) -f ${SRS_OBJS_DIR}/${SRS_MAKEFILE} librtmp
 	@echo "Building the srs-librtmp example."
-	(cd research/librtmp; \$(MAKE) ${SrsLibrtmpSampleEntry})
+	(cd research/librtmp; \$(MAKE) EXTRA_CXXFLAGS="${SrsGcov}" ${SrsLibrtmpSampleEntry})
 
 END
 else
@@ -550,11 +583,6 @@ if [ $SRS_EXPORT_LIBRTMP_PROJECT = NO ]; then
         echo -e "${YELLOW}Experiment: StreamCaster is enabled.${BLACK}"
     else
         echo -e "${GREEN}Note: StreamCaster is disabled.${BLACK}"
-    fi
-    if [ $SRS_KAFKA = YES ]; then
-        echo -e "${GREEN}Kafka is enabled.${BLACK}"
-    else
-        echo -e "${YELLOW}Warning: Kafka is disabled.${BLACK}"
     fi
     if [ $SRS_HDS = YES ]; then
         echo -e "${YELLOW}Experiment: HDS is enabled.${BLACK}"
@@ -709,4 +737,6 @@ else
         echo -e "${GREEN}Please use the srs-librtmp project: ${BLACK}"
         echo -e "${GREEN}       cd $SRS_EXPORT_LIBRTMP_PROJECT && make ${BLACK}"
     fi
+    # Change to experiment.
+    echo -e "${YELLOW}Warning: Notice srs-librtmp is deprecated and maybe removed in future.${BLACK}"
 fi

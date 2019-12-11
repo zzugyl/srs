@@ -29,3 +29,6 @@
 
 # Apple-specific garbage files.
 .AppleDouble
+
+.idea
+

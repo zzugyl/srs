@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2013-2018 Winlin
+ * Copyright (c) 2013-2019 Winlin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -33,6 +33,7 @@ class SrsJsonAny;
 class SrsRequest;
 class SrsSource;
 
+// For origin cluster.
 class SrsCoWorkers
 {
 private:
@@ -45,7 +46,7 @@ private:
 public:
     static SrsCoWorkers* instance();
 public:
-    virtual SrsJsonAny* dumps(std::string vhost, std::string app, std::string stream);
+    virtual SrsJsonAny* dumps(std::string vhost, std::string coworker, std::string app, std::string stream);
 private:
     virtual SrsRequest* find_stream_info(std::string vhost, std::string app, std::string stream);
 public:

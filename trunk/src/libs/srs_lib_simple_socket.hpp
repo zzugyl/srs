@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2013-2018 Winlin
+ * Copyright (c) 2013-2019 Winlin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -38,7 +38,7 @@
  * simple socket stream,
  * use tcp socket, sync block mode, for client like srs-librtmp.
  */
-class SimpleSocketStream : public ISrsProtocolReaderWriter
+class SimpleSocketStream : public ISrsProtocolReadWriter
 {
 private:
     srs_hijack_io_t io;
@@ -49,23 +49,22 @@ public:
     virtual srs_hijack_io_t hijack_io();
     virtual int create_socket(srs_rtmp_t owner);
     virtual int connect(const char* server, int port);
-// ISrsReader
+// Interface ISrsReader
 public:
     virtual srs_error_t read(void* buf, size_t size, ssize_t* nread);
-// ISrsProtocolReader
+// Interface ISrsProtocolReader
 public:
-    virtual void set_recv_timeout(int64_t tm);
-    virtual int64_t get_recv_timeout();
+    virtual void set_recv_timeout(srs_utime_t tm);
+    virtual srs_utime_t get_recv_timeout();
     virtual int64_t get_recv_bytes();
-// ISrsProtocolWriter
+// Interface ISrsProtocolWriter
 public:
-    virtual void set_send_timeout(int64_t tm);
-    virtual int64_t get_send_timeout();
+    virtual void set_send_timeout(srs_utime_t tm);
+    virtual srs_utime_t get_send_timeout();
     virtual int64_t get_send_bytes();
     virtual srs_error_t writev(const iovec *iov, int iov_size, ssize_t* nwrite);
-// ISrsProtocolReaderWriter
+// Interface ISrsProtocolReadWriter
 public:
-    virtual bool is_never_timeout(int64_t tm);
     virtual srs_error_t read_fully(void* buf, size_t size, ssize_t* nread);
     virtual srs_error_t write(void* buf, size_t size, ssize_t* nwrite);
 };

@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2013-2018 Winlin
+ * Copyright (c) 2013-2019 Winlin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -43,7 +43,7 @@ using namespace std;
 
 stringstream& srs_padding(stringstream& ss, SrsMp4DumpContext dc, int tab = 4)
 {
-    for (int i = 0; i < dc.level; i++) {
+    for (int i = 0; i < (int)dc.level; i++) {
         for (int j = 0; j < tab; j++) {
             ss << " ";
         }
@@ -69,7 +69,7 @@ stringstream& srs_dumps_array(std::vector<T>&arr, stringstream& ss, SrsMp4DumpCo
         limit = srs_min(SrsSummaryCount, limit);
     }
     
-    for (size_t i = 0; i < limit; i++) {
+    for (size_t i = 0; i < (size_t)limit; i++) {
         T& elem = arr[i];
         
         pfn(elem, ss, dc);
@@ -91,7 +91,7 @@ stringstream& srs_dumps_array(T* arr, int size, stringstream& ss, SrsMp4DumpCont
         limit = srs_min(SrsSummaryCount, limit);
     }
     
-    for (size_t i = 0; i < limit; i++) {
+    for (size_t i = 0; i < (size_t)limit; i++) {
         T& elem = arr[i];
         
         pfn(elem, ss, dc);
@@ -167,7 +167,7 @@ stringstream& srs_print_bytes(stringstream& ss, const char* p, int size, SrsMp4D
         max = size;
     }
     
-    for (int i = 0; i < max; i++) {
+    for (int i = 0; i < (int)max; i++) {
         ss << "0x" << std::setw(2) << std::setfill('0') << std::hex << (uint32_t)(uint8_t)p[i] << std::dec;
          if (i < max -1) {
              ss << ", ";
@@ -737,7 +737,7 @@ srs_error_t SrsMp4FileTypeBox::encode_header(SrsBuffer* buf)
     buf->write_4bytes(major_brand);
     buf->write_4bytes(minor_version);
     
-    for (size_t i = 0; i < compatible_brands.size(); i++) {
+    for (size_t i = 0; i < (size_t)compatible_brands.size(); i++) {
         buf->write_4bytes(compatible_brands[i]);
     }
     
@@ -1290,7 +1290,7 @@ srs_error_t SrsMp4TrackFragmentRunBox::decode_header(SrsBuffer* buf)
         first_sample_flags = buf->read_4bytes();
     }
     
-    for (int i = 0; i < sample_count; i++) {
+    for (int i = 0; i < (int)sample_count; i++) {
         SrsMp4TrunEntry* entry = new SrsMp4TrunEntry(this);
         entries.push_back(entry);
         
@@ -2069,6 +2069,10 @@ SrsMp4ElstEntry::SrsMp4ElstEntry() : segment_duration(0), media_time(0), media_r
     media_rate_fraction = 0;
 }
 
+SrsMp4ElstEntry::~SrsMp4ElstEntry()
+{
+}
+
 stringstream& SrsMp4ElstEntry::dumps(stringstream& ss, SrsMp4DumpContext dc)
 {
     return dumps_detail(ss, dc);
@@ -2112,7 +2116,7 @@ srs_error_t SrsMp4EditListBox::encode_header(SrsBuffer* buf)
     }
     
     buf->write_4bytes((int)entries.size());
-    for (size_t i = 0; i < entries.size(); i++) {
+    for (size_t i = 0; i < (size_t)entries.size(); i++) {
         SrsMp4ElstEntry& entry = entries[i];
         
         if (version == 1) {
@@ -3874,6 +3878,10 @@ SrsMp4SttsEntry::SrsMp4SttsEntry()
     sample_delta = 0;
 }
 
+SrsMp4SttsEntry::~SrsMp4SttsEntry()
+{
+}
+
 stringstream& SrsMp4SttsEntry::dumps_detail(stringstream& ss, SrsMp4DumpContext dc)
 {
     ss << "count=" << sample_count << ", delta=" << sample_delta;
@@ -3938,7 +3946,7 @@ srs_error_t SrsMp4DecodingTime2SampleBox::encode_header(SrsBuffer* buf)
     }
     
     buf->write_4bytes((int)entries.size());
-    for (size_t i = 0; i < entries.size(); i++) {
+    for (size_t i = 0; i < (size_t)entries.size(); i++) {
         SrsMp4SttsEntry& entry = entries[i];
         buf->write_4bytes(entry.sample_count);
         buf->write_4bytes(entry.sample_delta);
@@ -3959,7 +3967,7 @@ srs_error_t SrsMp4DecodingTime2SampleBox::decode_header(SrsBuffer* buf)
     if (entry_count) {
         entries.resize(entry_count);
     }
-    for (size_t i = 0; i < entry_count; i++) {
+    for (size_t i = 0; i < (size_t)entry_count; i++) {
         SrsMp4SttsEntry& entry = entries[i];
         entry.sample_count = buf->read_4bytes();
         entry.sample_delta = buf->read_4bytes();
@@ -3985,6 +3993,10 @@ SrsMp4CttsEntry::SrsMp4CttsEntry()
 {
     sample_count = 0;
     sample_offset = 0;
+}
+
+SrsMp4CttsEntry::~SrsMp4CttsEntry()
+{
 }
 
 stringstream& SrsMp4CttsEntry::dumps_detail(stringstream& ss, SrsMp4DumpContext dc)
@@ -4051,7 +4063,7 @@ srs_error_t SrsMp4CompositionTime2SampleBox::encode_header(SrsBuffer* buf)
     }
     
     buf->write_4bytes((int)entries.size());
-    for (size_t i = 0; i < entries.size(); i++) {
+    for (size_t i = 0; i < (size_t)entries.size(); i++) {
         SrsMp4CttsEntry& entry = entries[i];
         buf->write_4bytes(entry.sample_count);
         if (version == 0) {
@@ -4076,7 +4088,7 @@ srs_error_t SrsMp4CompositionTime2SampleBox::decode_header(SrsBuffer* buf)
     if (entry_count) {
         entries.resize(entry_count);
     }
-    for (size_t i = 0; i < entry_count; i++) {
+    for (size_t i = 0; i < (size_t)entry_count; i++) {
         SrsMp4CttsEntry& entry = entries[i];
         entry.sample_count = buf->read_4bytes();
         if (version == 0) {
@@ -6132,7 +6144,7 @@ SrsMp4M2tsSegmentEncoder::~SrsMp4M2tsSegmentEncoder()
     srs_freep(buffer);
 }
 
-srs_error_t SrsMp4M2tsSegmentEncoder::initialize(ISrsWriter* w, uint32_t sequence, uint64_t basetime, uint32_t tid)
+srs_error_t SrsMp4M2tsSegmentEncoder::initialize(ISrsWriter* w, uint32_t sequence, srs_utime_t basetime, uint32_t tid)
 {
     srs_error_t err = srs_success;
     
@@ -6240,7 +6252,7 @@ srs_error_t SrsMp4M2tsSegmentEncoder::flush(uint64_t& dts)
         traf->set_tfdt(tfdt);
         
         tfdt->version = 1;
-        tfdt->base_media_decode_time = decode_basetime;
+        tfdt->base_media_decode_time = srsu2ms(decode_basetime);
         
         SrsMp4TrackFragmentRunBox* trun = new SrsMp4TrackFragmentRunBox();
         traf->set_trun(trun);

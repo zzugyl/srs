@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2013-2018 Winlin
+ * Copyright (c) 2013-2019 Winlin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -41,6 +41,8 @@ string srs_video_codec_id2str(SrsVideoCodecId codec)
         case SrsVideoCodecIdOn2VP6:
         case SrsVideoCodecIdOn2VP6WithAlphaChannel:
             return "VP6";
+        case SrsVideoCodecIdHEVC:
+            return "HEVC";
         case SrsVideoCodecIdReserved:
         case SrsVideoCodecIdReserved1:
         case SrsVideoCodecIdReserved2:
@@ -60,6 +62,8 @@ string srs_audio_codec_id2str(SrsAudioCodecId codec)
             return "AAC";
         case SrsAudioCodecIdMP3:
             return "MP3";
+        case SrsAudioCodecIdOpus:
+            return "Opus";
         case SrsAudioCodecIdReserved1:
         case SrsAudioCodecIdLinearPCMPlatformEndian:
         case SrsAudioCodecIdADPCM:
@@ -85,6 +89,11 @@ string srs_audio_sample_rate2str(SrsAudioSampleRate v)
         case SrsAudioSampleRate11025: return "11025";
         case SrsAudioSampleRate22050: return "22050";
         case SrsAudioSampleRate44100: return "44100";
+        case SrsAudioSampleRateNB8kHz: return "NB8kHz";
+        case SrsAudioSampleRateMB12kHz: return "MB12kHz";
+        case SrsAudioSampleRateWB16kHz: return "WB16kHz";
+        case SrsAudioSampleRateSWB24kHz: return "SWB24kHz";
+        case SrsAudioSampleRateFB48kHz: return "FB48kHz";
         default: return "Other";
     }
 }
@@ -166,6 +175,14 @@ bool SrsFlvVideo::acceptable(char* data, int size)
     return true;
 }
 
+SrsFlvAudio::SrsFlvAudio()
+{
+}
+
+SrsFlvAudio::~SrsFlvAudio()
+{
+}
+
 bool SrsFlvAudio::sh(char* data, int size)
 {
     // sequence header only for aac
@@ -203,7 +220,7 @@ bool SrsFlvAudio::aac(char* data, int size)
 // 1 = 11 kHz = 11025 Hz
 // 2 = 22 kHz = 22050 Hz
 // 3 = 44 kHz = 44100 Hz
-int srs_flv_srates[] = {5512, 11025, 22050, 44100};
+int srs_flv_srates[] = {5512, 11025, 22050, 44100, 0};
 
 // the sample rates in the codec,
 // in the sequence header.
@@ -417,7 +434,6 @@ SrsFrame::SrsFrame()
 
 SrsFrame::~SrsFrame()
 {
-    srs_freep(codec);
 }
 
 srs_error_t SrsFrame::initialize(SrsCodecConfig* c)
@@ -537,10 +553,8 @@ srs_error_t SrsFormat::on_audio(int64_t timestamp, char* data, int size)
     SrsBuffer* buffer = new SrsBuffer(data, size);
     SrsAutoFree(SrsBuffer, buffer);
     
-    // audio decode
-    if (!buffer->require(1)) {
-        return srs_error_new(ERROR_HLS_DECODE_ERROR, "aac decode sound_format");
-    }
+    // We already checked the size is positive and data is not NULL.
+    srs_assert(buffer->require(1));
     
     // @see: E.4.2 Audio Tags, video_file_format_spec_v10_1.pdf, page 76
     uint8_t v = buffer->read_1bytes();
@@ -583,10 +597,8 @@ srs_error_t SrsFormat::on_video(int64_t timestamp, char* data, int size)
     SrsBuffer* buffer = new SrsBuffer(data, size);
     SrsAutoFree(SrsBuffer, buffer);
     
-    // video decode
-    if (!buffer->require(1)) {
-        return srs_error_new(ERROR_HLS_DECODE_ERROR, "decode frame_type");
-    }
+    // We already checked the size is positive and data is not NULL.
+    srs_assert(buffer->require(1));
     
     // @see: E.4.3 Video Tags, video_file_format_spec_v10_1.pdf, page 78
     int8_t frame_type = buffer->read_1bytes();
@@ -638,7 +650,7 @@ bool SrsFormat::is_aac_sequence_header()
 
 bool SrsFormat::is_avc_sequence_header()
 {
-    return vcodec && vcodec->id == SrsVideoCodecIdAVC
+    return vcodec && (vcodec->id == SrsVideoCodecIdAVC || vcodec->id == SrsVideoCodecIdHEVC)
         && video && video->avc_packet_type == SrsVideoAvcFrameTraitSequenceHeader;
 }
 
@@ -878,10 +890,7 @@ srs_error_t SrsFormat::avc_demux_sps_rbsp(char* rbsp, int nb_rbsp)
         return srs_error_new(ERROR_HLS_DECODE_ERROR, "sps the level_idc invalid");
     }
     
-    SrsBitBuffer bs;
-    if ((err = bs.initialize(&stream)) != srs_success) {
-        return srs_error_wrap(err, "init bit buffer");
-    }
+    SrsBitBuffer bs(&stream);
     
     int32_t seq_parameter_set_id = -1;
     if ((err = srs_avc_nalu_read_uev(&bs, seq_parameter_set_id)) != srs_success) {
@@ -1344,10 +1353,10 @@ srs_error_t SrsFormat::audio_aac_sequence_header_demux(char* data, int size)
     // donot force to LC, @see: https://github.com/ossrs/srs/issues/81
     // the source will print the sequence header info.
     //if (aac_profile > 3) {
-    // Mark all extended profiles as LC
-    // to make Android as happy as possible.
-    // @see: ngx_rtmp_hls_parse_aac_header
-    //aac_profile = 1;
+        // Mark all extended profiles as LC
+        // to make Android as happy as possible.
+        // @see: ngx_rtmp_hls_parse_aac_header
+        //aac_profile = 1;
     //}
     
     return err;

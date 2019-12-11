@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2013-2018 Winlin
+ * Copyright (c) 2013-2019 Winlin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -76,7 +76,7 @@ void SrsNgExec::on_unpublish()
 }
 
 // when error, ng-exec sleep for a while and retry.
-#define SRS_RTMP_EXEC_CIMS (3000)
+#define SRS_RTMP_EXEC_CIMS (3 * SRS_UTIME_SECONDS)
 srs_error_t SrsNgExec::cycle()
 {
     srs_error_t err = srs_success;
@@ -92,7 +92,7 @@ srs_error_t SrsNgExec::cycle()
             break;
         }
     
-        srs_usleep(SRS_RTMP_EXEC_CIMS * 1000);
+        srs_usleep(SRS_RTMP_EXEC_CIMS);
     }
     
     std::vector<SrsProcess*>::iterator it;
@@ -221,7 +221,7 @@ string SrsNgExec::parse(SrsRequest* req, string tmpl)
     output = srs_string_replace(output, "[pageUrl]", req->pageUrl);
     
     if (output.find("[url]") != string::npos) {
-        string url = srs_generate_rtmp_url(req->host, req->port, req->vhost, req->app, req->stream);
+        string url = srs_generate_rtmp_url(req->host, req->port, req->host, req->vhost, req->app, req->stream, req->param);
         output = srs_string_replace(output, "[url]", url);
     }
     

@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2013-2018 Winlin
+ * Copyright (c) 2013-2019 Winlin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -43,7 +43,11 @@ SrsThreadContext::~SrsThreadContext()
 
 int SrsThreadContext::generate_id()
 {
-    static int id = 100;
+    static int id = 0;
+
+    if (id == 0) {
+        id = (100 + ((int)(int64_t)this)%1000);
+    }
     
     int gid = id++;
     cache[srs_thread_self()] = gid;

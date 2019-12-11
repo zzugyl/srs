@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2013-2018 Winlin
+ * Copyright (c) 2013-2019 Winlin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -37,20 +37,19 @@ class SrsHttpParser;
 class ISrsHttpMessage;
 class SrsStSocket;
 class SrsKbps;
+class SrsWallClock;
 class SrsTcpClient;
 
-// the default timeout for http client.
-#define SRS_HTTP_CLIENT_TMMS (30*1000)
+// The default timeout for http client.
+#define SRS_HTTP_CLIENT_TIMEOUT (30 * SRS_UTIME_SECONDS)
 
-/**
- * The client to GET/POST/PUT/DELETE over HTTP.
- * @remark We will reuse the TCP transport until initialize or channel error,
- *      such as send/recv failed.
- * Usage:
- *      SrsHttpClient hc;
- *      hc.initialize("127.0.0.1", 80, 9000);
- *      hc.post("/api/v1/version", "Hello world!", NULL);
- */
+// The client to GET/POST/PUT/DELETE over HTTP.
+// @remark We will reuse the TCP transport until initialize or channel error,
+//      such as send/recv failed.
+// Usage:
+//      SrsHttpClient hc;
+//      hc.initialize("127.0.0.1", 80, 9000);
+//      hc.post("/api/v1/version", "Hello world!", NULL);
 class SrsHttpClient
 {
 private:
@@ -60,9 +59,10 @@ private:
     SrsHttpParser* parser;
     std::map<std::string, std::string> headers;
     SrsKbps* kbps;
+    SrsWallClock* clk;
 private:
-    // The timeout in ms.
-    int64_t timeout;
+    // The timeout in srs_utime_t.
+    srs_utime_t timeout;
     // The host name or ip.
     std::string host;
     int port;
@@ -70,36 +70,28 @@ public:
     SrsHttpClient();
     virtual ~SrsHttpClient();
 public:
-    /**
-     * Initliaze the client, disconnect the transport, renew the HTTP parser.
-     * @param tm The underlayer TCP transport timeout in ms.
-     * @remark we will set default values in headers, which can be override by set_header.
-     */
-    virtual srs_error_t initialize(std::string h, int p, int64_t tm = SRS_HTTP_CLIENT_TMMS);
-    /**
-     * Set HTTP request header in header[k]=v.
-     * @return the HTTP client itself.
-     */
+    // Initliaze the client, disconnect the transport, renew the HTTP parser.
+    // @param tm The underlayer TCP transport timeout in srs_utime_t.
+    // @remark we will set default values in headers, which can be override by set_header.
+    virtual srs_error_t initialize(std::string h, int p, srs_utime_t tm = SRS_HTTP_CLIENT_TIMEOUT);
+    // Set HTTP request header in header[k]=v.
+    // @return the HTTP client itself.
     virtual SrsHttpClient* set_header(std::string k, std::string v);
 public:
-    /**
-     * to post data to the uri.
-     * @param the path to request on.
-     * @param req the data post to uri. empty string to ignore.
-     * @param ppmsg output the http message to read the response.
-     * @remark user must free the ppmsg if not NULL.
-     */
+    // Post data to the uri.
+    // @param the path to request on.
+    // @param req the data post to uri. empty string to ignore.
+    // @param ppmsg output the http message to read the response.
+    // @remark user must free the ppmsg if not NULL.
     virtual srs_error_t post(std::string path, std::string req, ISrsHttpMessage** ppmsg);
-    /**
-     * to get data from the uri.
-     * @param the path to request on.
-     * @param req the data post to uri. empty string to ignore.
-     * @param ppmsg output the http message to read the response.
-     * @remark user must free the ppmsg if not NULL.
-     */
+    // Get data from the uri.
+    // @param the path to request on.
+    // @param req the data post to uri. empty string to ignore.
+    // @param ppmsg output the http message to read the response.
+    // @remark user must free the ppmsg if not NULL.
     virtual srs_error_t get(std::string path, std::string req, ISrsHttpMessage** ppmsg);
 private:
-    virtual void set_recv_timeout(int64_t tm);
+    virtual void set_recv_timeout(srs_utime_t tm);
 public:
     virtual void kbps_sample(const char* label, int64_t age);
 private:

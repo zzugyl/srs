@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2013-2018 Winlin
+ * Copyright (c) 2013-2019 Winlin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -28,13 +28,11 @@
 
 #include <string>
 
-/**
- * the handler for config reload.
- * when reload callback, the config is updated yet.
- *
- * features not support reload,
- * @see: https://github.com/ossrs/srs/wiki/v1_CN_Reload#notsupportedfeatures
- */
+// The handler for config reload.
+// When reload callback, the config is updated yet.
+//
+// Features not support reload,
+// @see: https://github.com/ossrs/srs/wiki/v1_CN_Reload#notsupportedfeatures
 class ISrsReloadHandler
 {
 public:

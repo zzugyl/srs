@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2013-2018 Winlin
+ * Copyright (c) 2013-2019 Winlin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -88,7 +88,7 @@ srs_error_t SrsFragmentedMp4::initialize(SrsRequest* r, bool video, SrsMpdWriter
     string file_home;
     string file_name;
     int64_t sequence_number;
-    uint64_t basetime;
+    srs_utime_t basetime;
     if ((err = mpd->get_fragment(video, file_home, file_name, sequence_number, basetime)) != srs_success) {
         return srs_error_wrap(err, "get fragment");
     }
@@ -162,7 +162,7 @@ SrsMpdWriter::SrsMpdWriter()
 {
     req = NULL;
     timeshit = update_period = fragment = 0;
-    last_update_mpd = -1;
+    last_update_mpd = 0;
 }
 
 SrsMpdWriter::~SrsMpdWriter()
@@ -172,17 +172,29 @@ SrsMpdWriter::~SrsMpdWriter()
 srs_error_t SrsMpdWriter::initialize(SrsRequest* r)
 {
     req = r;
+    return srs_success;
+}
+
+srs_error_t SrsMpdWriter::on_publish()
+{
+    SrsRequest* r = req;
+
     fragment = _srs_config->get_dash_fragment(r->vhost);
     update_period = _srs_config->get_dash_update_period(r->vhost);
     timeshit = _srs_config->get_dash_timeshift(r->vhost);
     home = _srs_config->get_dash_path(r->vhost);
     mpd_file = _srs_config->get_dash_mpd_file(r->vhost);
-    
+
     string mpd_path = srs_path_build_stream(mpd_file, req->vhost, req->app, req->stream);
     fragment_home = srs_path_dirname(mpd_path) + "/" + req->stream;
-    
-    srs_trace("DASH: Config fragment=%d, period=%d", fragment, update_period);
+
+    srs_trace("DASH: Config fragment=%" PRId64 ", period=%" PRId64, fragment, update_period);
+
     return srs_success;
+}
+
+void SrsMpdWriter::on_unpublish()
+{
 }
 
 srs_error_t SrsMpdWriter::write(SrsFormat* format)
@@ -190,10 +202,10 @@ srs_error_t SrsMpdWriter::write(SrsFormat* format)
     srs_error_t err = srs_success;
     
     // MPD is not expired?
-    if (last_update_mpd != -1 && srs_get_system_time_ms() - last_update_mpd < update_period) {
+    if (last_update_mpd != 0 && srs_get_system_time() - last_update_mpd < update_period) {
         return err;
     }
-    last_update_mpd = srs_get_system_time_ms();
+    last_update_mpd = srs_get_system_time();
     
     string mpd_path = srs_path_build_stream(mpd_file, req->vhost, req->app, req->stream);
     string full_path = home + "/" + mpd_path;
@@ -210,14 +222,14 @@ srs_error_t SrsMpdWriter::write(SrsFormat* format)
     << "<MPD profiles=\"urn:mpeg:dash:profile:isoff-live:2011,http://dashif.org/guidelines/dash-if-simple\" " << endl
     << "    ns1:schemaLocation=\"urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd\" " << endl
     << "    xmlns=\"urn:mpeg:dash:schema:mpd:2011\" xmlns:ns1=\"http://www.w3.org/2001/XMLSchema-instance\" " << endl
-    << "    type=\"dynamic\" minimumUpdatePeriod=\"PT" << update_period / 1000 << "S\" " << endl
-    << "    timeShiftBufferDepth=\"PT" << timeshit / 1000 << "S\" availabilityStartTime=\"1970-01-01T00:00:00Z\" " << endl
-    << "    maxSegmentDuration=\"PT" << fragment / 1000 << "S\" minBufferTime=\"PT" << fragment / 1000 << "S\" >" << endl
+    << "    type=\"dynamic\" minimumUpdatePeriod=\"PT" << update_period / SRS_UTIME_SECONDS << "S\" " << endl
+    << "    timeShiftBufferDepth=\"PT" << timeshit / SRS_UTIME_SECONDS << "S\" availabilityStartTime=\"1970-01-01T00:00:00Z\" " << endl
+    << "    maxSegmentDuration=\"PT" << fragment / SRS_UTIME_SECONDS << "S\" minBufferTime=\"PT" << fragment / SRS_UTIME_SECONDS << "S\" >" << endl
     << "    <BaseURL>" << req->stream << "/" << "</BaseURL>" << endl
     << "    <Period start=\"PT0S\">" << endl;
     if (format->acodec) {
         ss  << "        <AdaptationSet mimeType=\"audio/mp4\" segmentAlignment=\"true\" startWithSAP=\"1\">" << endl;
-        ss  << "            <SegmentTemplate duration=\"" << fragment / 1000 << "\" "
+        ss  << "            <SegmentTemplate duration=\"" << fragment / SRS_UTIME_SECONDS << "\" "
         << "initialization=\"$RepresentationID$-init.mp4\" "
         << "media=\"$RepresentationID$-$Number$.m4s\" />" << endl;
         ss  << "            <Representation id=\"audio\" bandwidth=\"48000\" codecs=\"mp4a.40.2\" />" << endl;
@@ -227,7 +239,7 @@ srs_error_t SrsMpdWriter::write(SrsFormat* format)
         int w = format->vcodec->width;
         int h = format->vcodec->height;
         ss  << "        <AdaptationSet mimeType=\"video/mp4\" segmentAlignment=\"true\" startWithSAP=\"1\">" << endl;
-        ss  << "            <SegmentTemplate duration=\"" << fragment / 1000 << "\" "
+        ss  << "            <SegmentTemplate duration=\"" << fragment / SRS_UTIME_SECONDS << "\" "
         << "initialization=\"$RepresentationID$-init.mp4\" "
         << "media=\"$RepresentationID$-$Number$.m4s\" />" << endl;
         ss  << "            <Representation id=\"video\" bandwidth=\"800000\" codecs=\"avc1.64001e\" "
@@ -259,13 +271,13 @@ srs_error_t SrsMpdWriter::write(SrsFormat* format)
     return err;
 }
 
-srs_error_t SrsMpdWriter::get_fragment(bool video, std::string& home, std::string& file_name, int64_t& sn, uint64_t& basetime)
+srs_error_t SrsMpdWriter::get_fragment(bool video, std::string& home, std::string& file_name, int64_t& sn, srs_utime_t& basetime)
 {
     srs_error_t err = srs_success;
     
     home = fragment_home;
     
-    sn = srs_update_system_time_ms() / fragment;
+    sn = srs_update_system_time() / fragment;
     basetime = sn * fragment;
     
     if (video) {
@@ -303,28 +315,48 @@ srs_error_t SrsDashController::initialize(SrsRequest* r)
     srs_error_t err = srs_success;
     
     req = r;
-    fragment = _srs_config->get_dash_fragment(r->vhost);
-    home = _srs_config->get_dash_path(r->vhost);
     
     if ((err = mpd->initialize(r)) != srs_success) {
         return srs_error_wrap(err, "mpd");
     }
     
-    string home, path;
-    
+    return err;
+}
+
+srs_error_t SrsDashController::on_publish()
+{
+    srs_error_t err = srs_success;
+
+    SrsRequest* r = req;
+
+    fragment = _srs_config->get_dash_fragment(r->vhost);
+    home = _srs_config->get_dash_path(r->vhost);
+
     srs_freep(vcurrent);
     vcurrent = new SrsFragmentedMp4();
     if ((err = vcurrent->initialize(req, true, mpd, video_tack_id)) != srs_success) {
         return srs_error_wrap(err, "video fragment");
     }
-    
+
     srs_freep(acurrent);
     acurrent = new SrsFragmentedMp4();
     if ((err = acurrent->initialize(req, false, mpd, audio_track_id)) != srs_success) {
         return srs_error_wrap(err, "audio fragment");
     }
-    
+
+    if ((err = mpd->on_publish()) != srs_success) {
+        return srs_error_wrap(err, "mpd");
+    }
+
     return err;
+}
+
+void SrsDashController::on_unpublish()
+{
+    mpd->on_unpublish();
+
+    srs_freep(vcurrent);
+    srs_freep(acurrent);
 }
 
 srs_error_t SrsDashController::on_audio(SrsSharedPtrMessage* shared_audio, SrsFormat* format)
@@ -490,6 +522,10 @@ srs_error_t SrsDash::on_publish()
         return err;
     }
     enabled = true;
+
+    if ((err = controller->on_publish()) != srs_success) {
+        return srs_error_wrap(err, "controller");
+    }
     
     return err;
 }
@@ -532,5 +568,7 @@ void SrsDash::on_unpublish()
     }
     
     enabled = false;
+
+    controller->on_unpublish();
 }
 

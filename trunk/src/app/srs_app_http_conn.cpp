@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2013-2018 Winlin
+ * Copyright (c) 2013-2019 Winlin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -72,24 +72,7 @@ SrsHttpConn::~SrsHttpConn()
     srs_freep(cors);
 }
 
-void SrsHttpConn::resample()
-{
-    // TODO: FIXME: implements it
-}
-
-int64_t SrsHttpConn::get_send_bytes_delta()
-{
-    // TODO: FIXME: implements it
-    return 0;
-}
-
-int64_t SrsHttpConn::get_recv_bytes_delta()
-{
-    // TODO: FIXME: implements it
-    return 0;
-}
-
-void SrsHttpConn::cleanup()
+void SrsHttpConn::remark(int64_t* in, int64_t* out)
 {
     // TODO: FIXME: implements it
 }
@@ -107,7 +90,7 @@ srs_error_t SrsHttpConn::do_cycle()
     
     // set the recv timeout, for some clients never disconnect the connection.
     // @see https://github.com/ossrs/srs/issues/398
-    skt->set_recv_timeout(SRS_HTTP_RECV_TMMS);
+    skt->set_recv_timeout(SRS_HTTP_RECV_TIMEOUT);
     
     SrsRequest* last_req = NULL;
     SrsAutoFree(SrsRequest, last_req);
@@ -123,19 +106,21 @@ srs_error_t SrsHttpConn::do_cycle()
         ISrsHttpMessage* req = NULL;
         
         // get a http message
-        if ((err = parser->parse_message(skt, this, &req)) != srs_success) {
+        if ((err = parser->parse_message(skt, &req)) != srs_success) {
             break;
         }
         
         // if SUCCESS, always NOT-NULL.
-        srs_assert(req);
-        
         // always free it in this scope.
+        srs_assert(req);
         SrsAutoFree(ISrsHttpMessage, req);
+        
+        // Attach owner connection to message.
+        SrsHttpMessage* hreq = (SrsHttpMessage*)req;
+        hreq->set_connection(this);
         
         // copy request to last request object.
         srs_freep(last_req);
-        SrsHttpMessage* hreq = dynamic_cast<SrsHttpMessage*>(req);
         last_req = hreq->to_request(hreq->host());
         
         // may should discard the body.
@@ -218,9 +203,13 @@ srs_error_t SrsResponseOnlyHttpConn::pop_message(ISrsHttpMessage** preq)
         return srs_error_wrap(err, "init socket");
     }
     
-    if ((err = parser->parse_message(&skt, this, preq)) != srs_success) {
+    if ((err = parser->parse_message(&skt, preq)) != srs_success) {
         return srs_error_wrap(err, "parse message");
     }
+    
+    // Attach owner connection to message.
+    SrsHttpMessage* hreq = (SrsHttpMessage*)(*preq);
+    hreq->set_connection(this);
     
     return err;
 }
@@ -237,8 +226,8 @@ srs_error_t SrsResponseOnlyHttpConn::on_got_http_message(ISrsHttpMessage* msg)
     }
     
     // drop all request body.
+    char body[4096];
     while (!br->eof()) {
-        char body[4096];
         if ((err = br->read(body, 4096, NULL)) != srs_success) {
             return srs_error_wrap(err, "read response");
         }

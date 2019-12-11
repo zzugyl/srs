@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2013-2018 Winlin
+ * Copyright (c) 2013-2019 Winlin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -22,8 +22,6 @@
  */
 
 #include <srs_app_mpegts_udp.hpp>
-
-#ifdef SRS_AUTO_STREAM_CASTER
 
 #include <stdlib.h>
 #include <sys/socket.h>
@@ -617,16 +615,16 @@ srs_error_t SrsMpegtsOverUdp::connect()
         return err;
     }
     
-    int64_t cto = SRS_CONSTS_RTMP_TMMS;
-    int64_t sto = SRS_CONSTS_RTMP_PULSE_TMMS;
+    srs_utime_t cto = SRS_CONSTS_RTMP_TIMEOUT;
+    srs_utime_t sto = SRS_CONSTS_RTMP_PULSE;
     sdk = new SrsSimpleRtmpClient(output, cto, sto);
     
     if ((err = sdk->connect()) != srs_success) {
         close();
-        return srs_error_wrap(err, "connect %s failed, cto=%" PRId64 ", sto=%" PRId64, output.c_str(), cto, sto);
+        return srs_error_wrap(err, "connect %s failed, cto=%dms, sto=%dms.", output.c_str(), srsu2msi(cto), srsu2msi(sto));
     }
     
-    if ((err = sdk->publish()) != srs_success) {
+    if ((err = sdk->publish(SRS_CONSTS_RTMP_PROTOCOL_CHUNK_SIZE)) != srs_success) {
         close();
         return srs_error_wrap(err, "publish");
     }
@@ -639,4 +637,3 @@ void SrsMpegtsOverUdp::close()
     srs_freep(sdk);
 }
 
-#endif

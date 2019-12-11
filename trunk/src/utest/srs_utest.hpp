@@ -1,7 +1,7 @@
 /*
 The MIT License (MIT)
 
-Copyright (c) 2013-2018 Winlin
+Copyright (c) 2013-2019 Winlin
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -24,44 +24,33 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #ifndef SRS_UTEST_PUBLIC_SHARED_HPP
 #define SRS_UTEST_PUBLIC_SHARED_HPP
 
+// Public all private and protected members.
+#define private public
+#define protected public
+
 /*
 #include <srs_utest.hpp>
 */
 #include <srs_core.hpp>
 
 #include "gtest/gtest.h"
+#include <string>
 
 #include <srs_app_log.hpp>
 
-#define SRS_UTEST_DEV
-#undef SRS_UTEST_DEV
-
-// enable all utest.
-#ifndef SRS_UTEST_DEV
-    #define ENABLE_UTEST_AMF0
-    #define ENABLE_UTEST_CONFIG
-    #define ENABLE_UTEST_CORE
-    #define ENABLE_UTEST_KERNEL
-    #define ENABLE_UTEST_PROTOCOL
-    #define ENABLE_UTEST_RELOAD
-#endif
-
-// disable some for fast dev, compile and startup.
-#ifdef SRS_UTEST_DEV
-    #undef ENABLE_UTEST_AMF0
-    #undef ENABLE_UTEST_CONFIG
-    #undef ENABLE_UTEST_CORE
-    #undef ENABLE_UTEST_KERNEL
-    #undef ENABLE_UTEST_PROTOCOL
-    #undef ENABLE_UTEST_RELOAD
-#endif
-
-#ifdef SRS_UTEST_DEV
-    #define ENABLE_UTEST_RELOAD
-#endif
-
 // we add an empty macro for upp to show the smart tips.
 #define VOID
+
+// Temporary disk config.
+extern std::string _srs_tmp_file_prefix;
+// Temporary network config.
+extern std::string _srs_tmp_host;
+extern int _srs_tmp_port;
+extern srs_utime_t _srs_tmp_timeout;
+
+// For errors.
+#define HELPER_EXPECT_SUCCESS(x) EXPECT_TRUE(srs_success == (err = x)); srs_freep(err)
+#define HELPER_EXPECT_FAILED(x) EXPECT_TRUE(srs_success != (err = x)); srs_freep(err)
 
 // the asserts of gtest:
 //    * {ASSERT|EXPECT}_EQ(expected, actual): Tests that expected == actual

@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2013-2018 Winlin
+ * Copyright (c) 2013-2019 Winlin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -22,8 +22,6 @@
  */
 
 #include <srs_app_ingest.hpp>
-
-#ifdef SRS_AUTO_INGEST
 
 #include <stdlib.h>
 using namespace std;
@@ -54,7 +52,7 @@ srs_error_t SrsIngesterFFMPEG::initialize(SrsFFMPEG* ff, string v, string i)
     ffmpeg = ff;
     vhost = v;
     id = i;
-    starttime = srs_get_system_time_ms();
+    starttime = srs_get_system_time();
     
     return err;
 }
@@ -64,9 +62,9 @@ string SrsIngesterFFMPEG::uri()
     return vhost + "/" + id;
 }
 
-int SrsIngesterFFMPEG::alive()
+srs_utime_t SrsIngesterFFMPEG::alive()
 {
-    return (int)(srs_get_system_time_ms() - starttime);
+    return srs_get_system_time() - starttime;
 }
 
 bool SrsIngesterFFMPEG::equals(string v)
@@ -170,7 +168,7 @@ void SrsIngester::fast_stop()
 
 // when error, ingester sleep for a while and retry.
 // ingest never sleep a long time, for we must start the stream ASAP.
-#define SRS_AUTO_INGESTER_CIMS (3000)
+#define SRS_AUTO_INGESTER_CIMS (3 * SRS_UTIME_SECONDS)
 
 srs_error_t SrsIngester::cycle()
 {
@@ -186,7 +184,7 @@ srs_error_t SrsIngester::cycle()
             return srs_error_wrap(err, "ingester");
         }
     
-        srs_usleep(SRS_AUTO_INGESTER_CIMS * 1000);
+        srs_usleep(SRS_AUTO_INGESTER_CIMS);
     }
     
     return err;
@@ -456,8 +454,8 @@ void SrsIngester::show_ingest_log_message()
     
     // reportable
     if (pprint->can_print()) {
-        srs_trace("-> " SRS_CONSTS_LOG_INGESTER " time=%" PRId64 ", ingesters=%d, #%d(alive=%ds, %s)",
-                  pprint->age(), (int)ingesters.size(), index, ingester->alive() / 1000, ingester->uri().c_str());
+        srs_trace("-> " SRS_CONSTS_LOG_INGESTER " time=%dms, ingesters=%d, #%d(alive=%dms, %s)",
+                  srsu2msi(pprint->age()), (int)ingesters.size(), index, srsu2msi(ingester->alive()), ingester->uri().c_str());
     }
 }
 
@@ -569,6 +567,4 @@ srs_error_t SrsIngester::on_reload_listen()
     expired = true;
     return srs_success;
 }
-
-#endif
 

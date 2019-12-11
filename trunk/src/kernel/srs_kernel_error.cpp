@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2013-2018 Winlin
+ * Copyright (c) 2013-2019 Winlin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -81,11 +81,15 @@ std::string SrsCplxError::description() {
         
         next = this;
         while (next) {
-            ss << "thread #" << next->cid << ": "
+            ss << "thread [" << next->cid << "]: "
             << next->func << "() [" << next->file << ":" << next->line << "]"
-            << "[errno=" << next->rerrno << "]"
-            << endl;
+            << "[errno=" << next->rerrno << "]";
+
             next = next->wrapped;
+
+            if (next) {
+                ss << endl;
+            }
         }
         
         desc = ss.str();

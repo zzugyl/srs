@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2013-2018 Winlin
+ * Copyright (c) 2013-2019 Winlin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -33,8 +33,6 @@ using namespace std;
 #include <srs_app_pithy_print.hpp>
 #include <srs_app_ffmpeg.hpp>
 #include <srs_kernel_utility.hpp>
-
-#ifdef SRS_AUTO_TRANSCODE
 
 // for encoder to detect the dead loop
 static std::vector<std::string> _transcoded_url;
@@ -89,7 +87,7 @@ void SrsEncoder::on_unpublish()
 }
 
 // when error, encoder sleep for a while and retry.
-#define SRS_RTMP_ENCODER_CIMS (3000)
+#define SRS_RTMP_ENCODER_CIMS (3 * SRS_UTIME_SECONDS)
 
 srs_error_t SrsEncoder::cycle()
 {
@@ -106,7 +104,7 @@ srs_error_t SrsEncoder::cycle()
             break;
         }
     
-        srs_usleep(SRS_RTMP_ENCODER_CIMS * 1000);
+        srs_usleep(SRS_RTMP_ENCODER_CIMS);
     }
     
     // kill ffmpeg when finished and it alive
@@ -282,6 +280,7 @@ srs_error_t SrsEncoder::initialize_ffmpeg(SrsFFMPEG* ffmpeg, SrsRequest* req, Sr
     output = srs_string_replace(output, "[port]", srs_int2str(req->port));
     output = srs_string_replace(output, "[app]", req->app);
     output = srs_string_replace(output, "[stream]", req->stream);
+    output = srs_string_replace(output, "[param]", req->param);
     output = srs_string_replace(output, "[engine]", engine->arg0());
     
     std::string log_file = SRS_CONSTS_NULL_FILE; // disabled
@@ -332,7 +331,4 @@ void SrsEncoder::show_encode_log_message()
                   pprint->age(), (int)ffmpegs.size(), input_stream_name.c_str());
     }
 }
-
-#endif
-
 

@@ -15,32 +15,24 @@ help=no
 
 ################################################################
 # feature options
-SRS_HDS=RESERVED
-SRS_NGINX=RESERVED
-SRS_SSL=RESERVED
-SRS_FFMPEG_TOOL=RESERVED
-SRS_TRANSCODE=RESERVED
-SRS_INGEST=RESERVED
-SRS_STAT=RESERVED
-SRS_STREAM_CASTER=RESERVED
-SRS_KAFKA=RESERVED
-SRS_LIBRTMP=RESERVED
-SRS_RESEARCH=RESERVED
-SRS_UTEST=RESERVED
-# tcmalloc
-SRS_GPERF=RESERVED
-# gperf memory check
-SRS_GPERF_MC=RESERVED
-# gperf memory defence
-SRS_GPERF_MD=RESERVED
-# gperf memory profile
-SRS_GPERF_MP=RESERVED
-# gperf cpu profile
-SRS_GPERF_CP=RESERVED
-# gprof
-SRS_GPROF=RESERVED
-#
+SRS_HDS=NO
+SRS_NGINX=NO
+SRS_FFMPEG_TOOL=NO
+SRS_LIBRTMP=NO
+SRS_RESEARCH=YES
+SRS_UTEST=YES
+SRS_GPERF=NO # Performance test: tcmalloc
+SRS_GPERF_MC=NO # Performance test: gperf memory check
+SRS_GPERF_MD=NO # Performance test: gperf memory defence
+SRS_GPERF_MP=NO # Performance test: gperf memory profile
+SRS_GPERF_CP=NO # Performance test: gperf cpu profile
+SRS_GPROF=NO # Performance test: gprof
 # Always enable the bellow features.
+SRS_STREAM_CASTER=YES
+SRS_INGEST=YES
+SRS_SSL=YES
+SRS_STAT=YES
+SRS_TRANSCODE=YES
 SRS_HTTP_CALLBACK=YES
 SRS_HTTP_SERVER=YES
 SRS_HTTP_API=YES
@@ -50,16 +42,18 @@ SRS_DVR=YES
 # 
 ################################################################
 # libraries
-SRS_FFMPEG_STUB=RESERVED
+SRS_FFMPEG_STUB=NO
 # arguments
 SRS_PREFIX=/usr/local/srs
 SRS_JOBS=1
-SRS_STATIC=RESERVED
+SRS_STATIC=NO
+# whether enable the gcov
+SRS_GCOV=NO
 # whether enable the log verbose/info/trace level.
 # always enable the warn/error level.
-SRS_LOG_VERBOSE=RESERVED
-SRS_LOG_INFO=RESERVED
-SRS_LOG_TRACE=RESERVED
+SRS_LOG_VERBOSE=NO
+SRS_LOG_INFO=NO
+SRS_LOG_TRACE=NO
 #
 ################################################################
 # experts
@@ -81,6 +75,7 @@ SRS_VALGRIND=NO
 SRS_X86_X64=NO
 # for osx system
 SRS_OSX=NO
+SRS_ALLOW_OSX=NO
 # armhf(v7cpu) built on ubuntu12
 SRS_ARM_UBUNTU12=NO
 # mips built on ubuntu12
@@ -121,7 +116,6 @@ Options:
   --with-hds                enable hds streaming, mux RTMP to F4M/F4V files.
   --with-nginx              enable delivery HTTP stream with nginx.
   --with-stream-caster      enable stream caster to serve other stream over other protocol.
-  --with-kafka              enable srs kafka producer to report to kafka.
   --with-ffmpeg             enable transcoding tool ffmpeg.
   --with-transcode          enable transcoding features.
   --with-ingest             enable ingest features.
@@ -142,7 +136,6 @@ Options:
   --without-hds             disable hds, the adobe http dynamic streaming.
   --without-nginx           disable delivery HTTP stream with nginx.
   --without-stream-caster   disable stream caster, only listen and serve RTMP/HTTP.
-  --without-kafka           disable the srs kafka producer.
   --without-ffmpeg          disable the ffmpeg transcode tool feature.
   --without-transcode       disable the transcoding feature.
   --without-ingest          disable the ingest feature.
@@ -160,7 +153,8 @@ Options:
   --without-mips-ubuntu12   do not cross build srs on ubuntu12 for mips.
                           
   --prefix=<path>           The absolute installation path for srs. Default: $SRS_PREFIX
-  --static                  whether add '-static' to link options.
+  --static                  Whether add '-static' to link options.
+  --gcov                    Whether enable the GCOV compiler options.
   --jobs[=N]                Allow N jobs at once; infinite jobs with no arg.
                             used for make in the configure, for example, to make ffmpeg.
   --log-verbose             whether enable the log verbose level. default: no.
@@ -233,7 +227,6 @@ function parse_user_option() {
         --with-ingest)                  SRS_INGEST=YES              ;;
         --with-stat)                    SRS_STAT=YES                ;;
         --with-stream-caster)           SRS_STREAM_CASTER=YES       ;;
-        --with-kafka)                   SRS_KAFKA=YES               ;;
         --with-librtmp)                 SRS_LIBRTMP=YES             ;;
         --with-research)                SRS_RESEARCH=YES            ;;
         --with-utest)                   SRS_UTEST=YES               ;;
@@ -254,7 +247,6 @@ function parse_user_option() {
         --without-ingest)               SRS_INGEST=NO               ;;
         --without-stat)                 SRS_STAT=NO                 ;;
         --without-stream-caster)        SRS_STREAM_CASTER=NO        ;;
-        --without-kafka)                SRS_KAFKA=NO                ;;
         --without-librtmp)              SRS_LIBRTMP=NO              ;;
         --without-research)             SRS_RESEARCH=NO             ;;
         --without-utest)                SRS_UTEST=NO                ;;
@@ -273,10 +265,12 @@ function parse_user_option() {
         --log-verbose)                  SRS_LOG_VERBOSE=YES         ;;
         --log-info)                     SRS_LOG_INFO=YES            ;;
         --log-trace)                    SRS_LOG_TRACE=YES           ;;
+        --gcov)                         SRS_GCOV=YES                ;;
         
         --x86-x64)                      SRS_X86_X64=YES             ;;
         --x86-64)                       SRS_X86_X64=YES             ;;
         --osx)                          SRS_OSX=YES                 ;;
+        --allow-osx)                    SRS_ALLOW_OSX=YES           ;;
         --arm)                          SRS_ARM_UBUNTU12=YES        ;;
         --mips)                         SRS_MIPS_UBUNTU12=YES       ;;
         --pi)                           SRS_PI=YES                  ;;
@@ -387,22 +381,10 @@ function apply_user_presets() {
     if [ $SRS_DISABLE_ALL = YES ]; then
         SRS_HDS=NO
         SRS_NGINX=NO
-        SRS_SSL=NO
         SRS_FFMPEG_TOOL=NO
-        SRS_TRANSCODE=NO
-        SRS_INGEST=NO
-        SRS_STAT=NO
-        SRS_STREAM_CASTER=NO
-        SRS_KAFKA=NO
         SRS_LIBRTMP=NO
         SRS_RESEARCH=NO
         SRS_UTEST=NO
-        SRS_GPERF=NO
-        SRS_GPERF_MC=NO
-        SRS_GPERF_MD=NO
-        SRS_GPERF_MP=NO
-        SRS_GPERF_CP=NO
-        SRS_GPROF=NO
         SRS_STATIC=NO
     fi
 
@@ -410,22 +392,10 @@ function apply_user_presets() {
     if [ $SRS_ENABLE_ALL = YES ]; then
         SRS_HDS=YES
         SRS_NGINX=YES
-        SRS_SSL=YES
         SRS_FFMPEG_TOOL=YES
-        SRS_TRANSCODE=YES
-        SRS_INGEST=YES
-        SRS_STAT=YES
-        SRS_STREAM_CASTER=YES
-        SRS_KAFKA=YES
         SRS_LIBRTMP=YES
         SRS_RESEARCH=YES
         SRS_UTEST=YES
-        SRS_GPERF=NO
-        SRS_GPERF_MC=NO
-        SRS_GPERF_MD=NO
-        SRS_GPERF_MP=NO
-        SRS_GPERF_CP=NO
-        SRS_GPROF=NO
         SRS_STATIC=NO
     fi
 
@@ -433,22 +403,10 @@ function apply_user_presets() {
     if [ $SRS_FAST = YES ]; then
         SRS_HDS=NO
         SRS_NGINX=NO
-        SRS_SSL=NO
         SRS_FFMPEG_TOOL=NO
-        SRS_TRANSCODE=NO
-        SRS_INGEST=NO
-        SRS_STAT=NO
-        SRS_STREAM_CASTER=NO
-        SRS_KAFKA=NO
         SRS_LIBRTMP=NO
         SRS_RESEARCH=NO
         SRS_UTEST=NO
-        SRS_GPERF=NO
-        SRS_GPERF_MC=NO
-        SRS_GPERF_MD=NO
-        SRS_GPERF_MP=NO
-        SRS_GPERF_CP=NO
-        SRS_GPROF=NO
         SRS_STATIC=NO
     fi
 
@@ -456,22 +414,10 @@ function apply_user_presets() {
     if [ $SRS_PURE_RTMP = YES ]; then
         SRS_HDS=NO
         SRS_NGINX=NO
-        SRS_SSL=YES
         SRS_FFMPEG_TOOL=NO
-        SRS_TRANSCODE=NO
-        SRS_INGEST=NO
-        SRS_STAT=NO
-        SRS_STREAM_CASTER=NO
-        SRS_KAFKA=NO
         SRS_LIBRTMP=NO
         SRS_RESEARCH=NO
         SRS_UTEST=NO
-        SRS_GPERF=NO
-        SRS_GPERF_MC=NO
-        SRS_GPERF_MD=NO
-        SRS_GPERF_MP=NO
-        SRS_GPERF_CP=NO
-        SRS_GPROF=NO
         SRS_STATIC=NO
     fi
 
@@ -479,22 +425,10 @@ function apply_user_presets() {
     if [ $SRS_ARM_UBUNTU12 = YES ]; then
         SRS_HDS=YES
         SRS_NGINX=NO
-        SRS_SSL=YES
         SRS_FFMPEG_TOOL=NO
-        SRS_TRANSCODE=YES
-        SRS_INGEST=YES
-        SRS_STAT=YES
-        SRS_STREAM_CASTER=YES
-        SRS_KAFKA=YES
         SRS_LIBRTMP=YES
         SRS_RESEARCH=NO
         SRS_UTEST=NO
-        SRS_GPERF=NO
-        SRS_GPERF_MC=NO
-        SRS_GPERF_MD=NO
-        SRS_GPERF_MP=NO
-        SRS_GPERF_CP=NO
-        SRS_GPROF=NO
         # TODO: FIXME: need static? maybe donot.
         SRS_STATIC=YES
     fi
@@ -503,22 +437,10 @@ function apply_user_presets() {
     if [ $SRS_MIPS_UBUNTU12 = YES ]; then
         SRS_HDS=YES
         SRS_NGINX=NO
-        SRS_SSL=YES
         SRS_FFMPEG_TOOL=NO
-        SRS_TRANSCODE=YES
-        SRS_INGEST=YES
-        SRS_STAT=YES
-        SRS_STREAM_CASTER=YES
-        SRS_KAFKA=YES
         SRS_LIBRTMP=YES
         SRS_RESEARCH=NO
         SRS_UTEST=NO
-        SRS_GPERF=NO
-        SRS_GPERF_MC=NO
-        SRS_GPERF_MD=NO
-        SRS_GPERF_MP=NO
-        SRS_GPERF_CP=NO
-        SRS_GPROF=NO
         SRS_STATIC=NO
     fi
 
@@ -526,22 +448,10 @@ function apply_user_presets() {
     if [ $SRS_X86_X64 = YES ]; then
         SRS_HDS=YES
         SRS_NGINX=NO
-        SRS_SSL=YES
         SRS_FFMPEG_TOOL=NO
-        SRS_TRANSCODE=YES
-        SRS_INGEST=YES
-        SRS_STAT=YES
-        SRS_STREAM_CASTER=YES
-        SRS_KAFKA=YES
         SRS_LIBRTMP=YES
         SRS_RESEARCH=NO
         SRS_UTEST=YES
-        SRS_GPERF=NO
-        SRS_GPERF_MC=NO
-        SRS_GPERF_MD=NO
-        SRS_GPERF_MP=NO
-        SRS_GPERF_CP=NO
-        SRS_GPROF=NO
         SRS_STATIC=NO
     fi
 
@@ -549,22 +459,10 @@ function apply_user_presets() {
     if [ $SRS_OSX = YES ]; then
         SRS_HDS=YES
         SRS_NGINX=NO
-        SRS_SSL=YES
         SRS_FFMPEG_TOOL=NO
-        SRS_TRANSCODE=YES
-        SRS_INGEST=YES
-        SRS_STAT=YES
-        SRS_STREAM_CASTER=YES
-        SRS_KAFKA=YES
         SRS_LIBRTMP=YES
         SRS_RESEARCH=NO
         SRS_UTEST=YES
-        SRS_GPERF=NO
-        SRS_GPERF_MC=NO
-        SRS_GPERF_MD=NO
-        SRS_GPERF_MP=NO
-        SRS_GPERF_CP=NO
-        SRS_GPROF=NO
         SRS_STATIC=NO
         # valgrind is not supported by macOS sierra, read
         # https://stackoverflow.com/questions/40650338/valgrind-on-macos-sierra
@@ -575,22 +473,10 @@ function apply_user_presets() {
     if [ $SRS_DEV = YES ]; then
         SRS_HDS=YES
         SRS_NGINX=NO
-        SRS_SSL=YES
         SRS_FFMPEG_TOOL=YES
-        SRS_TRANSCODE=YES
-        SRS_INGEST=YES
-        SRS_STAT=YES
-        SRS_STREAM_CASTER=YES
-        SRS_KAFKA=YES
         SRS_LIBRTMP=YES
         SRS_RESEARCH=YES
         SRS_UTEST=YES
-        SRS_GPERF=NO
-        SRS_GPERF_MC=NO
-        SRS_GPERF_MD=NO
-        SRS_GPERF_MP=NO
-        SRS_GPERF_CP=NO
-        SRS_GPROF=NO
         SRS_STATIC=NO
     fi
 
@@ -598,22 +484,10 @@ function apply_user_presets() {
     if [ $SRS_FAST_DEV = YES ]; then
         SRS_HDS=YES
         SRS_NGINX=NO
-        SRS_SSL=YES
         SRS_FFMPEG_TOOL=NO
-        SRS_TRANSCODE=YES
-        SRS_INGEST=YES
-        SRS_STAT=YES
-        SRS_STREAM_CASTER=YES
-        SRS_KAFKA=YES
         SRS_LIBRTMP=NO
         SRS_RESEARCH=NO
         SRS_UTEST=NO
-        SRS_GPERF=NO
-        SRS_GPERF_MC=NO
-        SRS_GPERF_MD=NO
-        SRS_GPERF_MP=NO
-        SRS_GPERF_CP=NO
-        SRS_GPROF=NO
         SRS_STATIC=NO
     fi
 	
@@ -621,22 +495,10 @@ function apply_user_presets() {
     if [ $SRS_DEMO = YES ]; then
         SRS_HDS=YES
         SRS_NGINX=NO
-        SRS_SSL=YES
         SRS_FFMPEG_TOOL=YES
-        SRS_TRANSCODE=YES
-        SRS_INGEST=YES
-        SRS_STAT=YES
-        SRS_STREAM_CASTER=YES
-        SRS_KAFKA=YES
         SRS_LIBRTMP=YES
         SRS_RESEARCH=NO
         SRS_UTEST=YES
-        SRS_GPERF=NO
-        SRS_GPERF_MC=NO
-        SRS_GPERF_MD=NO
-        SRS_GPERF_MP=NO
-        SRS_GPERF_CP=NO
-        SRS_GPROF=NO
         SRS_STATIC=NO
     fi
 
@@ -644,22 +506,10 @@ function apply_user_presets() {
     if [ $SRS_PI = YES ]; then
         SRS_HDS=YES
         SRS_NGINX=NO
-        SRS_SSL=YES
         SRS_FFMPEG_TOOL=NO
-        SRS_TRANSCODE=YES
-        SRS_INGEST=YES
-        SRS_STAT=YES
-        SRS_STREAM_CASTER=YES
-        SRS_KAFKA=YES
         SRS_LIBRTMP=YES
         SRS_RESEARCH=NO
         SRS_UTEST=NO
-        SRS_GPERF=NO
-        SRS_GPERF_MC=NO
-        SRS_GPERF_MD=NO
-        SRS_GPERF_MP=NO
-        SRS_GPERF_CP=NO
-        SRS_GPROF=NO
         SRS_STATIC=NO
     fi
 
@@ -667,22 +517,10 @@ function apply_user_presets() {
     if [ $SRS_CUBIE = YES ]; then
         SRS_HDS=YES
         SRS_NGINX=NO
-        SRS_SSL=YES
         SRS_FFMPEG_TOOL=YES
-        SRS_TRANSCODE=YES
-        SRS_INGEST=YES
-        SRS_STAT=YES
-        SRS_STREAM_CASTER=NO
-        SRS_KAFKA=YES
         SRS_LIBRTMP=YES
         SRS_RESEARCH=NO
         SRS_UTEST=NO
-        SRS_GPERF=NO
-        SRS_GPERF_MC=NO
-        SRS_GPERF_MD=NO
-        SRS_GPERF_MP=NO
-        SRS_GPERF_CP=NO
-        SRS_GPROF=NO
         SRS_STATIC=NO
     fi
 }
@@ -705,6 +543,11 @@ function apply_user_detail_options() {
 
     # Always enable HTTP utilies.
     if [ $SRS_HTTP_CORE = NO ]; then SRS_HTTP_CORE=YES; echo -e "${YELLOW}[WARN] Always enable HTTP utilies.${BLACK}"; fi
+    if [ $SRS_STREAM_CASTER = NO ]; then SRS_STREAM_CASTER=YES; echo -e "${YELLOW}[WARN] Always enable StreamCaster.${BLACK}"; fi
+    if [ $SRS_INGEST = NO ]; then SRS_INGEST=YES; echo -e "${YELLOW}[WARN] Always enable Ingest.${BLACK}"; fi
+    if [ $SRS_SSL = NO ]; then SRS_SSL=YES; echo -e "${YELLOW}[WARN] Always enable SSL.${BLACK}"; fi
+    if [ $SRS_STAT = NO ]; then SRS_STAT=YES; echo -e "${YELLOW}[WARN] Always enable Statistic.${BLACK}"; fi
+    if [ $SRS_TRANSCODE = NO ]; then SRS_TRANSCODE=YES; echo -e "${YELLOW}[WARN] Always enable Transcode.${BLACK}"; fi
     if [ $SRS_HTTP_CALLBACK = NO ]; then SRS_HTTP_CALLBACK=YES; echo -e "${YELLOW}[WARN] Always enable HTTP callback.${BLACK}"; fi
     if [ $SRS_HTTP_SERVER = NO ]; then SRS_HTTP_SERVER=YES; echo -e "${YELLOW}[WARN] Always enable HTTP server.${BLACK}"; fi
     if [ $SRS_HTTP_API = NO ]; then SRS_HTTP_API=YES; echo -e "${YELLOW}[WARN] Always enable HTTP API.${BLACK}"; fi
@@ -730,10 +573,10 @@ function apply_user_detail_options() {
         SRS_SSL=NO
         SRS_FFMPEG_TOOL=NO
         SRS_TRANSCODE=NO
+        SRS_HTTP_CALLBACK=NO
         SRS_INGEST=NO
         SRS_STAT=NO
         SRS_STREAM_CASTER=NO
-        SRS_KAFKA=NO
         SRS_LIBRTMP=YES
         SRS_RESEARCH=YES
         SRS_UTEST=NO
@@ -765,7 +608,6 @@ SRS_AUTO_CONFIGURE="--prefix=${SRS_PREFIX}"
     if [ $SRS_HTTP_CALLBACK = YES ]; then SRS_AUTO_CONFIGURE="${SRS_AUTO_CONFIGURE} --with-http-callback"; else SRS_AUTO_CONFIGURE="${SRS_AUTO_CONFIGURE} --without-http-callback"; fi
     if [ $SRS_HTTP_SERVER = YES ]; then SRS_AUTO_CONFIGURE="${SRS_AUTO_CONFIGURE} --with-http-server"; else SRS_AUTO_CONFIGURE="${SRS_AUTO_CONFIGURE} --without-http-server"; fi
     if [ $SRS_STREAM_CASTER = YES ]; then SRS_AUTO_CONFIGURE="${SRS_AUTO_CONFIGURE} --with-stream-caster"; else SRS_AUTO_CONFIGURE="${SRS_AUTO_CONFIGURE} --without-stream-caster"; fi
-    if [ $SRS_KAFKA = YES ]; then SRS_AUTO_CONFIGURE="${SRS_AUTO_CONFIGURE} --with-kafka"; else SRS_AUTO_CONFIGURE="${SRS_AUTO_CONFIGURE} --without-kafka"; fi
     if [ $SRS_HTTP_API = YES ]; then SRS_AUTO_CONFIGURE="${SRS_AUTO_CONFIGURE} --with-http-api"; else SRS_AUTO_CONFIGURE="${SRS_AUTO_CONFIGURE} --without-http-api"; fi
     if [ $SRS_LIBRTMP = YES ]; then SRS_AUTO_CONFIGURE="${SRS_AUTO_CONFIGURE} --with-librtmp"; else SRS_AUTO_CONFIGURE="${SRS_AUTO_CONFIGURE} --without-librtmp"; fi
     if [ $SRS_RESEARCH = YES ]; then SRS_AUTO_CONFIGURE="${SRS_AUTO_CONFIGURE} --with-research"; else SRS_AUTO_CONFIGURE="${SRS_AUTO_CONFIGURE} --without-research"; fi
@@ -782,6 +624,7 @@ SRS_AUTO_CONFIGURE="--prefix=${SRS_PREFIX}"
     if [ $SRS_LOG_VERBOSE = YES ]; then SRS_AUTO_CONFIGURE="${SRS_AUTO_CONFIGURE} --log-verbose"; fi
     if [ $SRS_LOG_INFO = YES ]; then SRS_AUTO_CONFIGURE="${SRS_AUTO_CONFIGURE} --log-info"; fi
     if [ $SRS_LOG_TRACE = YES ]; then SRS_AUTO_CONFIGURE="${SRS_AUTO_CONFIGURE} --log-trace"; fi
+    if [ $SRS_GCOV = YES ]; then SRS_AUTO_CONFIGURE="${SRS_AUTO_CONFIGURE} --gcov"; fi
     echo "User config: $SRS_AUTO_USER_CONFIGURE"
     echo "Detail config: ${SRS_AUTO_CONFIGURE}"
 }
@@ -850,7 +693,6 @@ function check_option_conflicts() {
     if [ $SRS_SSL = RESERVED ]; then echo "you must specifies the ssl, see: ./configure --help"; __check_ok=NO; fi
     if [ $SRS_FFMPEG_TOOL = RESERVED ]; then echo "you must specifies the ffmpeg, see: ./configure --help"; __check_ok=NO; fi
     if [ $SRS_STREAM_CASTER = RESERVED ]; then echo "you must specifies the stream-caster, see: ./configure --help"; __check_ok=NO; fi
-    if [ $SRS_KAFKA = RESERVED ]; then echo "you must specifies the kafka, see: ./configure --help"; __check_ok=NO; fi
     if [ $SRS_LIBRTMP = RESERVED ]; then echo "you must specifies the librtmp, see: ./configure --help"; __check_ok=NO; fi
     if [ $SRS_RESEARCH = RESERVED ]; then echo "you must specifies the research, see: ./configure --help"; __check_ok=NO; fi
     if [ $SRS_UTEST = RESERVED ]; then echo "you must specifies the utest, see: ./configure --help"; __check_ok=NO; fi
@@ -865,6 +707,16 @@ function check_option_conflicts() {
     if [[ -z $SRS_PREFIX ]]; then echo "you must specifies the prefix, see: ./configure --prefix"; __check_ok=NO; fi
     if [ $__check_ok = NO ]; then
         exit 1;
+    fi
+
+    if [[ $SRS_OSX == YES && $SRS_ALLOW_OSX == NO ]]; then
+        macOSVersion=`sw_vers -productVersion`
+        macOSVersionMajor=`echo $macOSVersion|awk -F '.' '{print $1}'`
+        macOSVersionMinor=`echo $macOSVersion|awk -F '.' '{print $2}'`
+        if [[ $macOSVersionMajor -ge 10 && $macOSVersionMinor -ge 14 ]]; then
+            echo "macOS $macOSVersion is not supported, read https://github.com/ossrs/srs/issues/1250"
+            exit -1
+        fi
     fi
 }
 check_option_conflicts

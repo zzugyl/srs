@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2013-2018 Winlin
+ * Copyright (c) 2013-2019 Winlin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -56,11 +56,12 @@ ISrsMessagePumper::~ISrsMessagePumper()
 {
 }
 
-SrsRecvThread::SrsRecvThread(ISrsMessagePumper* p, SrsRtmpServer* r, int tm)
+SrsRecvThread::SrsRecvThread(ISrsMessagePumper* p, SrsRtmpServer* r, srs_utime_t tm, int parent_cid)
 {
     rtmp = r;
     pumper = p;
     timeout = tm;
+    _parent_cid = parent_cid;
     trd = new SrsDummyCoroutine();
 }
 
@@ -79,7 +80,7 @@ srs_error_t SrsRecvThread::start()
     srs_error_t err = srs_success;
     
     srs_freep(trd);
-    trd = new SrsSTCoroutine("recv", this);
+    trd = new SrsSTCoroutine("recv", this, _parent_cid);
     
     if ((err = trd->start()) != srs_success) {
         return srs_error_wrap(err, "recv thread");
@@ -107,7 +108,7 @@ srs_error_t SrsRecvThread::cycle()
     // to use isolate thread to recv, can improve about 33% performance.
     // @see https://github.com/ossrs/srs/issues/194
     // @see: https://github.com/ossrs/srs/issues/217
-    rtmp->set_recv_timeout(SRS_CONSTS_NO_TMMS);
+    rtmp->set_recv_timeout(SRS_UTIME_NO_TIMEOUT);
     
     pumper->on_start();
     
@@ -116,7 +117,7 @@ srs_error_t SrsRecvThread::cycle()
     }
     
     // reset the timeout to pulse mode.
-    rtmp->set_recv_timeout(timeout * 1000);
+    rtmp->set_recv_timeout(timeout);
     
     pumper->on_stop();
     
@@ -134,7 +135,7 @@ srs_error_t SrsRecvThread::do_cycle()
         
         // When the pumper is interrupted, wait then retry.
         if (pumper->interrupted()) {
-            srs_usleep(timeout * 1000);
+            srs_usleep(timeout);
             continue;
         }
         
@@ -159,8 +160,8 @@ srs_error_t SrsRecvThread::do_cycle()
     return err;
 }
 
-SrsQueueRecvThread::SrsQueueRecvThread(SrsConsumer* consumer, SrsRtmpServer* rtmp_sdk, int timeout_ms)
-: trd(this, rtmp_sdk, timeout_ms)
+SrsQueueRecvThread::SrsQueueRecvThread(SrsConsumer* consumer, SrsRtmpServer* rtmp_sdk, srs_utime_t tm, int parent_cid)
+	: trd(this, rtmp_sdk, tm, parent_cid)
 {
     _consumer = consumer;
     rtmp = rtmp_sdk;
@@ -272,8 +273,9 @@ void SrsQueueRecvThread::on_stop()
     rtmp->set_auto_response(true);
 }
 
-SrsPublishRecvThread::SrsPublishRecvThread(SrsRtmpServer* rtmp_sdk, SrsRequest* _req, int mr_sock_fd, int timeout_ms, SrsRtmpConn* conn, SrsSource* source)
-    : trd(this, rtmp_sdk, timeout_ms)
+SrsPublishRecvThread::SrsPublishRecvThread(SrsRtmpServer* rtmp_sdk, SrsRequest* _req,
+	int mr_sock_fd, srs_utime_t tm, SrsRtmpConn* conn, SrsSource* source, int parent_cid)
+    : trd(this, rtmp_sdk, tm, parent_cid)
 {
     rtmp = rtmp_sdk;
     
@@ -292,7 +294,7 @@ SrsPublishRecvThread::SrsPublishRecvThread(SrsRtmpServer* rtmp_sdk, SrsRequest* 
     // the mr settings,
     // @see https://github.com/ossrs/srs/issues/241
     mr = _srs_config->get_mr_enabled(req->vhost);
-    mr_sleep = _srs_config->get_mr_sleep_ms(req->vhost);
+    mr_sleep = _srs_config->get_mr_sleep(req->vhost);
     
     realtime = _srs_config->get_realtime_enabled(req->vhost);
     
@@ -308,14 +310,14 @@ SrsPublishRecvThread::~SrsPublishRecvThread()
     srs_freep(recv_error);
 }
 
-srs_error_t SrsPublishRecvThread::wait(uint64_t timeout_ms)
+srs_error_t SrsPublishRecvThread::wait(srs_utime_t tm)
 {
     if (recv_error != srs_success) {
         return srs_error_copy(recv_error);
     }
     
     // ignore any return of cond wait.
-    srs_cond_timedwait(error, timeout_ms * 1000);
+    srs_cond_timedwait(error, tm);
     
     return srs_success;
 }
@@ -381,7 +383,7 @@ srs_error_t SrsPublishRecvThread::consume(SrsCommonMessage* msg)
     
     // log to show the time of recv thread.
     srs_verbose("recv thread now=%" PRId64 "us, got msg time=%" PRId64 "ms, size=%d",
-                srs_update_system_time_ms(), msg->header.timestamp, msg->size);
+                srs_update_system_time(), msg->header.timestamp, msg->size);
     
     // the rtmp connection will handle this message
     err = _conn->handle_publish_message(_source, msg);
@@ -466,7 +468,7 @@ void SrsPublishRecvThread::on_read(ssize_t nread)
      * @see https://github.com/ossrs/srs/issues/241
      */
     if (nread < SRS_MR_SMALL_BYTES) {
-        srs_usleep(mr_sleep * 1000);
+        srs_usleep(mr_sleep);
     }
 }
 #endif
@@ -482,11 +484,11 @@ srs_error_t SrsPublishRecvThread::on_reload_vhost_publish(string vhost)
     // the mr settings,
     // @see https://github.com/ossrs/srs/issues/241
     bool mr_enabled = _srs_config->get_mr_enabled(req->vhost);
-    int sleep_ms = _srs_config->get_mr_sleep_ms(req->vhost);
+    srs_utime_t sleep_v = _srs_config->get_mr_sleep(req->vhost);
     
     // update buffer when sleep ms changed.
-    if (mr_sleep != sleep_ms) {
-        set_socket_buffer(sleep_ms);
+    if (mr_sleep != sleep_v) {
+        set_socket_buffer(sleep_v);
     }
     
 #ifdef SRS_PERF_MERGED_READ
@@ -506,7 +508,7 @@ srs_error_t SrsPublishRecvThread::on_reload_vhost_publish(string vhost)
     
     // update to new state
     mr = mr_enabled;
-    mr_sleep = sleep_ms;
+    mr_sleep = sleep_v;
     
     return err;
 }
@@ -526,7 +528,7 @@ srs_error_t SrsPublishRecvThread::on_reload_vhost_realtime(string vhost)
     return err;
 }
 
-void SrsPublishRecvThread::set_socket_buffer(int sleep_ms)
+void SrsPublishRecvThread::set_socket_buffer(srs_utime_t sleep_v)
 {
     // the bytes:
     //      4KB=4096, 8KB=8192, 16KB=16384, 32KB=32768, 64KB=65536,
@@ -539,7 +541,7 @@ void SrsPublishRecvThread::set_socket_buffer(int sleep_ms)
     //      2000*3000/8=750000B(about 732KB).
     //      2000*5000/8=1250000B(about 1220KB).
     int kbps = 5000;
-    int socket_buffer_size = sleep_ms * kbps / 8;
+    int socket_buffer_size = srsu2msi(sleep_v) * kbps / 8;
     
     int fd = mr_fd;
     int onb_rbuf = 0;
@@ -554,7 +556,7 @@ void SrsPublishRecvThread::set_socket_buffer(int sleep_ms)
     getsockopt(fd, SOL_SOCKET, SO_RCVBUF, &nb_rbuf, &sock_buf_size);
     
     srs_trace("mr change sleep %d=>%d, erbuf=%d, rbuf %d=>%d, sbytes=%d, realtime=%d",
-              mr_sleep, sleep_ms, socket_buffer_size, onb_rbuf, nb_rbuf, 
+              srsu2msi(mr_sleep), srsu2msi(sleep_v), socket_buffer_size, onb_rbuf, nb_rbuf,
               SRS_MR_SMALL_BYTES, realtime);
     
     rtmp->set_recv_buffer(nb_rbuf);

@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2013-2018 Winlin
+ * Copyright (c) 2013-2019 Winlin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -56,10 +56,10 @@
 #define SRS_PERF_MERGED_READ
 // the default config of mr.
 #define SRS_PERF_MR_ENABLED false
-#define SRS_PERF_MR_SLEEP 350
+#define SRS_PERF_MR_SLEEP (350 * SRS_UTIME_MILLISECONDS)
 
 /**
- * the MW(merged-write) send cache time in ms.
+ * the MW(merged-write) send cache time in srs_utime_t.
  * the default value, user can override it in config.
  * to improve send performance, cache msgs and send in a time.
  * for example, cache 500ms videos and audios, then convert all these
@@ -91,7 +91,7 @@
  *       2000            150         300
  */
 // the default config of mw.
-#define SRS_PERF_MW_SLEEP 350
+#define SRS_PERF_MW_SLEEP (350 * SRS_UTIME_MILLISECONDS)
 /**
  * how many msgs can be send entirely.
  * for play clients to get msgs then totally send out.
@@ -148,8 +148,8 @@
  */
 // whether gop cache is on.
 #define SRS_PERF_GOP_CACHE true
-// in seconds, the live queue length.
-#define SRS_PERF_PLAY_QUEUE 30
+// in srs_utime_t, the live queue length.
+#define SRS_PERF_PLAY_QUEUE (30 * SRS_UTIME_SECONDS)
 
 /**
  * whether always use complex send algorithm.

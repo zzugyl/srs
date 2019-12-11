@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2013-2018 Winlin
+ * Copyright (c) 2013-2019 Winlin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -34,22 +34,17 @@
 #include <sstream>
 using namespace std;
 
+#include <openssl/aes.h>
+#include <cstring>
 #include <srs_kernel_log.hpp>
 #include <srs_kernel_error.hpp>
-#include <srs_kernel_file.hpp>
 #include <srs_kernel_codec.hpp>
 #include <srs_kernel_stream.hpp>
 #include <srs_kernel_utility.hpp>
 #include <srs_kernel_buffer.hpp>
 #include <srs_core_autofree.hpp>
 
-// in ms, for HLS aac sync time.
-#define SRS_CONF_DEFAULT_AAC_SYNC 100
-
-// @see: ngx_rtmp_hls_audio
-/* We assume here AAC frame size is 1024
- * Need to handle AAC frames with frame size of 960 */
-#define _SRS_AAC_SAMPLE_SIZE 1024
+#define HLS_AES_ENCRYPT_BLOCK_LENGTH SRS_TS_PACKET_SIZE * 4
 
 // the mpegts header specifed the video/audio pid.
 #define TS_PMT_NUMBER 1
@@ -182,8 +177,11 @@ SrsTsMessage* SrsTsMessage::detach()
     cp->sid = sid;
     cp->PES_packet_length = PES_packet_length;
     cp->continuity_counter = continuity_counter;
+    
+    srs_freep(cp->payload);
     cp->payload = payload;
     payload = NULL;
+    
     return cp;
 }
 
@@ -292,7 +290,7 @@ srs_error_t SrsTsContext::decode(SrsBuffer* stream, ISrsTsHandler* handler)
     return err;
 }
 
-srs_error_t SrsTsContext::encode(SrsFileWriter* writer, SrsTsMessage* msg, SrsVideoCodecId vc, SrsAudioCodecId ac)
+srs_error_t SrsTsContext::encode(ISrsStreamWriter* writer, SrsTsMessage* msg, SrsVideoCodecId vc, SrsAudioCodecId ac)
 {
     srs_error_t err = srs_success;
     
@@ -314,6 +312,7 @@ srs_error_t SrsTsContext::encode(SrsFileWriter* writer, SrsTsMessage* msg, SrsVi
         case SrsVideoCodecIdOn2VP6:
         case SrsVideoCodecIdOn2VP6WithAlphaChannel:
         case SrsVideoCodecIdScreenVideoVersion2:
+        case SrsVideoCodecIdHEVC:
             vs = SrsTsStreamReserved;
             break;
     }
@@ -342,6 +341,7 @@ srs_error_t SrsTsContext::encode(SrsFileWriter* writer, SrsTsMessage* msg, SrsVi
         case SrsAudioCodecIdSpeex:
         case SrsAudioCodecIdReservedMP3_8kHz:
         case SrsAudioCodecIdReservedDeviceSpecificSound:
+        case SrsAudioCodecIdOpus:
             as = SrsTsStreamReserved;
             break;
     }
@@ -372,7 +372,7 @@ void SrsTsContext::set_sync_byte(int8_t sb)
     sync_byte = sb;
 }
 
-srs_error_t SrsTsContext::encode_pat_pmt(SrsFileWriter* writer, int16_t vpid, SrsTsStream vs, int16_t apid, SrsTsStream as)
+srs_error_t SrsTsContext::encode_pat_pmt(ISrsStreamWriter* writer, int16_t vpid, SrsTsStream vs, int16_t apid, SrsTsStream as)
 {
     srs_error_t err = srs_success;
     
@@ -433,7 +433,7 @@ srs_error_t SrsTsContext::encode_pat_pmt(SrsFileWriter* writer, int16_t vpid, Sr
     return err;
 }
 
-srs_error_t SrsTsContext::encode_pes(SrsFileWriter* writer, SrsTsMessage* msg, int16_t pid, SrsTsStream sid, bool pure_audio)
+srs_error_t SrsTsContext::encode_pes(ISrsStreamWriter* writer, SrsTsMessage* msg, int16_t pid, SrsTsStream sid, bool pure_audio)
 {
     srs_error_t err = srs_success;
     
@@ -744,8 +744,9 @@ SrsTsPacket* SrsTsPacket::create_pat(SrsTsContext* context, int16_t pmt_number, 
     return pkt;
 }
 
-SrsTsPacket* SrsTsPacket::create_pmt(SrsTsContext* context, int16_t pmt_number, int16_t pmt_pid, int16_t vpid, SrsTsStream vs, int16_t apid, SrsTsStream as)
-{
+SrsTsPacket* SrsTsPacket::create_pmt(SrsTsContext* context,
+    int16_t pmt_number, int16_t pmt_pid, int16_t vpid, SrsTsStream vs, int16_t apid, SrsTsStream as
+) {
     SrsTsPacket* pkt = new SrsTsPacket(context);
     pkt->sync_byte = 0x47;
     pkt->transport_error_indicator = 0;
@@ -792,9 +793,9 @@ SrsTsPacket* SrsTsPacket::create_pmt(SrsTsContext* context, int16_t pmt_number, 
 }
 
 SrsTsPacket* SrsTsPacket::create_pes_first(SrsTsContext* context,
-                                           int16_t pid, SrsTsPESStreamId sid, uint8_t continuity_counter, bool discontinuity,
-                                           int64_t pcr, int64_t dts, int64_t pts, int size
-                                           ) {
+    int16_t pid, SrsTsPESStreamId sid, uint8_t continuity_counter, bool discontinuity,
+    int64_t pcr, int64_t dts, int64_t pts, int size
+) {
     SrsTsPacket* pkt = new SrsTsPacket(context);
     pkt->sync_byte = 0x47;
     pkt->transport_error_indicator = 0;
@@ -2535,7 +2536,7 @@ srs_error_t SrsTsPayloadPMT::psi_encode(SrsBuffer* stream)
     return err;
 }
 
-SrsTsContextWriter::SrsTsContextWriter(SrsFileWriter* w, SrsTsContext* c, SrsAudioCodecId ac, SrsVideoCodecId vc)
+SrsTsContextWriter::SrsTsContextWriter(ISrsStreamWriter* w, SrsTsContext* c, SrsAudioCodecId ac, SrsVideoCodecId vc)
 {
     writer = w;
     context = c;
@@ -2546,25 +2547,6 @@ SrsTsContextWriter::SrsTsContextWriter(SrsFileWriter* w, SrsTsContext* c, SrsAud
 
 SrsTsContextWriter::~SrsTsContextWriter()
 {
-    close();
-}
-
-srs_error_t SrsTsContextWriter::open(string p)
-{
-    srs_error_t err = srs_success;
-    
-    path = p;
-    
-    close();
-    
-    // reset the context for a new ts start.
-    context->reset();
-    
-    if ((err = writer->open(path)) != srs_success) {
-        return srs_error_wrap(err, "ts: open writer");
-    }
-    
-    return err;
 }
 
 srs_error_t SrsTsContextWriter::write_audio(SrsTsMessage* audio)
@@ -2597,14 +2579,96 @@ srs_error_t SrsTsContextWriter::write_video(SrsTsMessage* video)
     return err;
 }
 
-void SrsTsContextWriter::close()
-{
-    writer->close();
-}
-
 SrsVideoCodecId SrsTsContextWriter::video_codec()
 {
     return vcodec;
+}
+
+SrsEncFileWriter::SrsEncFileWriter()
+{
+    memset(iv,0,16);
+    
+    buf = new char[HLS_AES_ENCRYPT_BLOCK_LENGTH];
+    memset(buf, 0, HLS_AES_ENCRYPT_BLOCK_LENGTH);
+    
+    nb_buf = 0;
+    key = (unsigned char*)new AES_KEY();
+}
+
+SrsEncFileWriter::~SrsEncFileWriter()
+{
+    srs_freepa(buf);
+    
+    AES_KEY* k = (AES_KEY*)key;
+    srs_freep(k);
+}
+
+srs_error_t SrsEncFileWriter::write(void* data, size_t count, ssize_t* pnwrite)
+{
+    srs_error_t err = srs_success;
+    
+    srs_assert(count == SRS_TS_PACKET_SIZE);
+
+    if (nb_buf < HLS_AES_ENCRYPT_BLOCK_LENGTH) {
+        memcpy(buf + nb_buf, (char*)data, SRS_TS_PACKET_SIZE);
+        nb_buf += SRS_TS_PACKET_SIZE;
+    }
+    
+    if (nb_buf == HLS_AES_ENCRYPT_BLOCK_LENGTH) {
+        nb_buf = 0;
+        
+        char* cipher = new char[HLS_AES_ENCRYPT_BLOCK_LENGTH];
+        SrsAutoFreeA(char, cipher);
+        
+        AES_KEY* k = (AES_KEY*)key;
+        AES_cbc_encrypt((unsigned char *)buf, (unsigned char *)cipher, HLS_AES_ENCRYPT_BLOCK_LENGTH, k, iv, AES_ENCRYPT);
+        
+        if ((err = SrsFileWriter::write(cipher, HLS_AES_ENCRYPT_BLOCK_LENGTH, pnwrite)) != srs_success) {
+            return srs_error_wrap(err, "write cipher");
+        }
+    }
+    
+    return err;
+}
+
+srs_error_t SrsEncFileWriter::config_cipher(unsigned char* key, unsigned char* iv)
+{
+    srs_error_t err = srs_success;
+    
+    memcpy(this->iv, iv, 16);
+  
+    AES_KEY* k = (AES_KEY*)this->key;
+    if (AES_set_encrypt_key(key, 16 * 8, k)) {
+        return srs_error_new(ERROR_SYSTEM_FILE_WRITE, "set aes key failed");
+    }
+    
+    return err;
+}
+
+void SrsEncFileWriter::close()
+{
+    if(nb_buf > 0) {
+        int nb_padding = 16 - (nb_buf % 16);
+        if (nb_padding > 0) {
+            memset(buf + nb_buf, nb_padding, nb_padding);
+        }
+        
+        char* cipher = new char[nb_buf + nb_padding];
+        SrsAutoFreeA(char, cipher);
+        
+        AES_KEY* k = (AES_KEY*)key;
+        AES_cbc_encrypt((unsigned char *)buf, (unsigned char *)cipher, nb_buf + nb_padding, k, iv, AES_ENCRYPT);
+        
+        srs_error_t err = srs_success;
+        if ((err = SrsFileWriter::write(cipher, nb_buf + nb_padding, NULL)) != srs_success) {
+            srs_warn("ignore err %s", srs_error_desc(err).c_str());
+            srs_error_reset(err);
+        }
+
+        nb_buf = 0;
+    }
+    
+    SrsFileWriter::close();
 }
 
 SrsTsMessageCache::SrsTsMessageCache()
@@ -2916,7 +2980,7 @@ SrsTsTransmuxer::~SrsTsTransmuxer()
     srs_freep(context);
 }
 
-srs_error_t SrsTsTransmuxer::initialize(SrsFileWriter* fw)
+srs_error_t SrsTsTransmuxer::initialize(ISrsStreamWriter* fw)
 {
     srs_error_t err = srs_success;
     
@@ -2926,19 +2990,11 @@ srs_error_t SrsTsTransmuxer::initialize(SrsFileWriter* fw)
     
     srs_assert(fw);
     
-    if (!fw->is_open()) {
-        return srs_error_new(ERROR_KERNEL_FLV_STREAM_CLOSED, "ts: stream is not open");
-    }
-    
     writer = fw;
     
     srs_freep(tscw);
     // TODO: FIXME: Support config the codec.
     tscw = new SrsTsContextWriter(fw, context, SrsAudioCodecIdAAC, SrsVideoCodecIdAVC);
-    
-    if ((err = tscw->open("")) != srs_success) {
-        return srs_error_wrap(err, "ts: open writer");
-    }
     
     return err;
 }

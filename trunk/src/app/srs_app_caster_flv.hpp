@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2013-2018 Winlin
+ * Copyright (c) 2013-2019 Winlin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -29,8 +29,6 @@
 #include <string>
 #include <vector>
 
-#ifdef SRS_AUTO_STREAM_CASTER
-
 class SrsConfDirective;
 class SrsHttpServeMux;
 class SrsRtmpClient;
@@ -48,9 +46,7 @@ class SrsSimpleRtmpClient;
 #include <srs_app_http_conn.hpp>
 #include <srs_kernel_file.hpp>
 
-/**
- * the stream caster for flv stream over HTTP POST.
- */
+// The stream caster for flv stream over HTTP POST.
 class SrsAppCasterFlv : virtual public ISrsTcpHandler
     , virtual public IConnectionManager, virtual public ISrsHttpHandler
 {
@@ -64,20 +60,18 @@ public:
     virtual ~SrsAppCasterFlv();
 public:
     virtual srs_error_t initialize();
-// ISrsTcpHandler
+// Interface ISrsTcpHandler
 public:
     virtual srs_error_t on_tcp_client(srs_netfd_t stfd);
-// IConnectionManager
+// Interface IConnectionManager
 public:
     virtual void remove(ISrsConnection* c);
-// ISrsHttpHandler
+// Interface ISrsHttpHandler
 public:
     virtual srs_error_t serve_http(ISrsHttpResponseWriter* w, ISrsHttpMessage* r);
 };
 
-/**
- * the dynamic http connection, never drop the body.
- */
+// The dynamic http connection, never drop the body.
 class SrsDynamicHttpConn : public SrsHttpConn
 {
 private:
@@ -95,10 +89,7 @@ private:
     virtual srs_error_t do_proxy(ISrsHttpResponseReader* rr, SrsFlvDecoder* dec);
 };
 
-/**
- * the http wrapper for file reader,
- * to read http post stream like a file.
- */
+// The http wrapper for file reader, to read http post stream like a file.
 class SrsHttpFileReader : public SrsFileReader
 {
 private:
@@ -107,9 +98,7 @@ public:
     SrsHttpFileReader(ISrsHttpResponseReader* h);
     virtual ~SrsHttpFileReader();
 public:
-    /**
-     * open file reader, can open then close then open...
-     */
+    // Open file reader, can open then close then open...
     virtual srs_error_t open(std::string file);
     virtual void close();
 public:
@@ -126,4 +115,3 @@ public:
 
 #endif
 
-#endif

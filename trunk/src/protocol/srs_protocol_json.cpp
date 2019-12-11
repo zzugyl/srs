@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2013-2018 Winlin
+ * Copyright (c) 2013-2019 Winlin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -1318,7 +1318,7 @@ void json_value_free (json_value * value)
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2013-2018 Winlin
+ * Copyright (c) 2013-2019 Winlin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -1577,7 +1577,7 @@ string SrsJsonAny::dumps()
             return "\"" + to_str() + "\"";
         }
         case SRS_JSON_Boolean: {
-            return to_boolean()? "true":"false";
+            return to_boolean()? "true" : "false";
         }
         case SRS_JSON_Integer: {
             return srs_int2str(to_integer());
@@ -1585,7 +1585,7 @@ string SrsJsonAny::dumps()
         case SRS_JSON_Number: {
             // len(max int64_t) is 20, plus one "+-."
             char tmp[22];
-            snprintf(tmp, 22, "%.6f", to_number());
+            snprintf(tmp, 22, "%.2f", to_number());
             return tmp;
         }
         case SRS_JSON_Null: {
@@ -1600,11 +1600,9 @@ string SrsJsonAny::dumps()
             return arr->dumps();
         }
         default: {
-            break;
+            return "null";
         }
     }
-    
-    return "null";
 }
 
 SrsAmf0Any* SrsJsonAny::to_amf0()
@@ -1634,11 +1632,9 @@ SrsAmf0Any* SrsJsonAny::to_amf0()
             srs_assert(false);
         }
         default: {
-            break;
+            return SrsAmf0Any::null();
         }
     }
-    
-    return SrsAmf0Any::null();
 }
 
 SrsJsonAny* SrsJsonAny::str(const char* value)
@@ -1700,7 +1696,7 @@ SrsJsonAny* srs_json_parse_tree(json_value* node)
             return SrsJsonAny::boolean(node->u.boolean != 0);
         case json_object: {
             SrsJsonObject* obj = SrsJsonAny::object();
-            for (int i = 0; i < node->u.object.length; i++) {
+            for (int i = 0; i < (int)node->u.object.length; i++) {
                 json_object_entry& entry = node->u.object.values[i];
                 SrsJsonAny* value = srs_json_parse_tree(entry.value);
                 
@@ -1715,7 +1711,7 @@ SrsJsonAny* srs_json_parse_tree(json_value* node)
         }
         case json_array: {
             SrsJsonArray* arr = SrsJsonAny::array();
-            for (int i = 0; i < node->u.array.length; i++) {
+            for (int i = 0; i < (int)node->u.array.length; i++) {
                 json_value* p = node->u.array.values[i];
                 SrsJsonAny* value = srs_json_parse_tree(p);
                 
@@ -1731,8 +1727,6 @@ SrsJsonAny* srs_json_parse_tree(json_value* node)
         default:
             return NULL;
     }
-    
-    return NULL;
 }
 
 SrsJsonAny* SrsJsonAny::loads(const string& str)
@@ -1976,9 +1970,10 @@ SrsJsonAny* SrsJsonArray::at(int index)
     return elem;
 }
 
-void SrsJsonArray::add(SrsJsonAny* value)
+SrsJsonArray* SrsJsonArray::add(SrsJsonAny* value)
 {
     properties.push_back(value);
+    return this;
 }
 
 SrsJsonArray* SrsJsonArray::append(SrsJsonAny* value)

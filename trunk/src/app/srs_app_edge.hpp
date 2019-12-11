@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2013-2018 Winlin
+ * Copyright (c) 2013-2019 Winlin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -40,41 +40,35 @@ class SrsPublishEdge;
 class SrsRtmpClient;
 class SrsCommonMessage;
 class SrsMessageQueue;
-class ISrsProtocolReaderWriter;
+class ISrsProtocolReadWriter;
 class SrsKbps;
 class SrsLbRoundRobin;
 class SrsTcpClient;
 class SrsSimpleRtmpClient;
 class SrsPacket;
 
-/**
- * the state of edge, auto machine
- */
+// The state of edge, auto machine
 enum SrsEdgeState
 {
     SrsEdgeStateInit = 0,
     
-    // for play edge
+    // For play edge
     SrsEdgeStatePlay = 100,
     // play stream from origin, ingest stream
     SrsEdgeStateIngestConnected = 101,
     
-    // for publish edge
+    // For publish edge
     SrsEdgeStatePublish = 200,
 };
 
-/**
- * the state of edge from user, manual machine
- */
+// The state of edge from user, manual machine
 enum SrsEdgeUserState
 {
     SrsEdgeUserStateInit = 0,
     SrsEdgeUserStateReloading = 100,
 };
 
-/**
- * the upstream of edge, can be rtmp or http.
- */
+// The upstream of edge, can be rtmp or http.
 class SrsEdgeUpstream
 {
 public:
@@ -86,17 +80,22 @@ public:
     virtual srs_error_t decode_message(SrsCommonMessage* msg, SrsPacket** ppacket) = 0;
     virtual void close() = 0;
 public:
-    virtual void set_recv_timeout(int64_t tm) = 0;
+    virtual void selected(std::string& server, int& port) = 0;
+    virtual void set_recv_timeout(srs_utime_t tm) = 0;
     virtual void kbps_sample(const char* label, int64_t age) = 0;
 };
 
 class SrsEdgeRtmpUpstream : public SrsEdgeUpstream
 {
 private:
-    // for RTMP 302, if not empty,
+    // For RTMP 302, if not empty,
     // use this <ip[:port]> as upstream.
     std::string redirect;
     SrsSimpleRtmpClient* sdk;
+private:
+    // Current selected server, the ip:port.
+    std::string selected_ip;
+    int selected_port;
 public:
     // @param rediect, override the server. ignore if empty.
     SrsEdgeRtmpUpstream(std::string r);
@@ -107,13 +106,12 @@ public:
     virtual srs_error_t decode_message(SrsCommonMessage* msg, SrsPacket** ppacket);
     virtual void close();
 public:
-    virtual void set_recv_timeout(int64_t tm);
+    virtual void selected(std::string& server, int& port);
+    virtual void set_recv_timeout(srs_utime_t tm);
     virtual void kbps_sample(const char* label, int64_t age);
 };
 
-/**
- * edge used to ingest stream from origin.
- */
+// The edge used to ingest stream from origin.
 class SrsEdgeIngester : public ISrsCoroutineHandler
 {
 private:
@@ -123,8 +121,6 @@ private:
     SrsCoroutine* trd;
     SrsLbRoundRobin* lb;
     SrsEdgeUpstream* upstream;
-    // for RTMP 302 redirect.
-    std::string redirect;
 public:
     SrsEdgeIngester();
     virtual ~SrsEdgeIngester();
@@ -133,19 +129,17 @@ public:
     virtual srs_error_t start();
     virtual void stop();
     virtual std::string get_curr_origin();
-// interface ISrsReusableThread2Handler
+// Interface ISrsReusableThread2Handler
 public:
     virtual srs_error_t cycle();
 private:
     virtual srs_error_t do_cycle();
 private:
-    virtual srs_error_t ingest();
-    virtual srs_error_t process_publish_message(SrsCommonMessage* msg);
+    virtual srs_error_t ingest(std::string& redirect);
+    virtual srs_error_t process_publish_message(SrsCommonMessage* msg, std::string& redirect);
 };
 
-/**
- * edge used to forward stream to origin.
- */
+// The edge used to forward stream to origin.
 class SrsEdgeForwarder : public ISrsCoroutineHandler
 {
 private:
@@ -155,27 +149,23 @@ private:
     SrsCoroutine* trd;
     SrsSimpleRtmpClient* sdk;
     SrsLbRoundRobin* lb;
-    /**
-     * we must ensure one thread one fd principle,
-     * that is, a fd must be write/read by the one thread.
-     * the publish service thread will proxy(msg), and the edge forward thread
-     * will cycle(), so we use queue for cycle to send the msg of proxy.
-     */
+    // we must ensure one thread one fd principle,
+    // that is, a fd must be write/read by the one thread.
+    // The publish service thread will proxy(msg), and the edge forward thread
+    // will cycle(), so we use queue for cycle to send the msg of proxy.
     SrsMessageQueue* queue;
-    /**
-     * error code of send, for edge proxy thread to query.
-     */
+    // error code of send, for edge proxy thread to query.
     int send_error_code;
 public:
     SrsEdgeForwarder();
     virtual ~SrsEdgeForwarder();
 public:
-    virtual void set_queue_size(double queue_size);
+    virtual void set_queue_size(srs_utime_t queue_size);
 public:
     virtual srs_error_t initialize(SrsSource* s, SrsPublishEdge* e, SrsRequest* r);
     virtual srs_error_t start();
     virtual void stop();
-// interface ISrsReusableThread2Handler
+// Interface ISrsReusableThread2Handler
 public:
     virtual srs_error_t cycle();
 private:
@@ -184,10 +174,7 @@ public:
     virtual srs_error_t proxy(SrsCommonMessage* msg);
 };
 
-/**
- * play edge control service.
- * downloading edge speed-up.
- */
+// The play edge control service.
 class SrsPlayEdge
 {
 private:
@@ -197,32 +184,21 @@ public:
     SrsPlayEdge();
     virtual ~SrsPlayEdge();
 public:
-    /**
-     * always use the req of source,
-     * for we assume all client to edge is invalid,
-     * if auth open, edge must valid it from origin, then service it.
-     */
+    // Always use the req of source,
+    // For we assume all client to edge is invalid,
+    // if auth open, edge must valid it from origin, then service it.
     virtual srs_error_t initialize(SrsSource* source, SrsRequest* req);
-    /**
-     * when client play stream on edge.
-     */
+    // When client play stream on edge.
     virtual srs_error_t on_client_play();
-    /**
-     * when all client stopped play, disconnect to origin.
-     */
+    // When all client stopped play, disconnect to origin.
     virtual void on_all_client_stop();
     virtual std::string get_curr_origin();
 public:
-    /**
-     * when ingester start to play stream.
-     */
+    // When ingester start to play stream.
     virtual srs_error_t on_ingest_play();
 };
 
-/**
- * publish edge control service.
- * uploading edge speed-up.
- */
+// The publish edge control service.
 class SrsPublishEdge
 {
 private:
@@ -232,21 +208,15 @@ public:
     SrsPublishEdge();
     virtual ~SrsPublishEdge();
 public:
-    virtual void set_queue_size(double queue_size);
+    virtual void set_queue_size(srs_utime_t queue_size);
 public:
     virtual srs_error_t initialize(SrsSource* source, SrsRequest* req);
     virtual bool can_publish();
-    /**
-     * when client publish stream on edge.
-     */
+    // When client publish stream on edge.
     virtual srs_error_t on_client_publish();
-    /**
-     * proxy publish stream to edge
-     */
+    // Proxy publish stream to edge
     virtual srs_error_t on_proxy_publish(SrsCommonMessage* msg);
-    /**
-     * proxy unpublish stream to edge.
-     */
+    // Proxy unpublish stream to edge.
     virtual void on_proxy_unpublish();
 };
 

@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2013-2018 Winlin
+ * Copyright (c) 2013-2019 Winlin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -34,6 +34,9 @@ using namespace std;
 #include <srs_kernel_log.hpp>
 #include <srs_service_utility.hpp>
 #include <srs_kernel_utility.hpp>
+
+// nginx also set to 512
+#define SERVER_LISTEN_BACKLOG 512
 
 #ifdef __linux__
 #include <sys/epoll.h>
@@ -86,17 +89,52 @@ void srs_close_stfd(srs_netfd_t& stfd)
     }
 }
 
-void srs_fd_close_exec(int fd)
+srs_error_t srs_fd_closeexec(int fd)
 {
     int flags = fcntl(fd, F_GETFD);
     flags |= FD_CLOEXEC;
-    fcntl(fd, F_SETFD, flags);
+    if (fcntl(fd, F_SETFD, flags) == -1) {
+        return srs_error_new(ERROR_SOCKET_SETCLOSEEXEC, "FD_CLOEXEC fd=%v", fd);
+    }
+
+    return srs_success;
 }
 
-void srs_socket_reuse_addr(int fd)
+srs_error_t srs_fd_reuseaddr(int fd)
 {
     int v = 1;
-    setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &v, sizeof(int));
+    if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &v, sizeof(int)) == -1) {
+        return srs_error_new(ERROR_SOCKET_SETREUSEADDR, "SO_REUSEADDR fd=%v", fd);
+    }
+
+	return srs_success;
+}
+
+srs_error_t srs_fd_reuseport(int fd)
+{
+#if defined(SO_REUSEPORT)
+    int v = 1;
+    if (setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &v, sizeof(int)) == -1) {
+        return srs_error_new(ERROR_SOCKET_SETREUSEADDR, "SO_REUSEPORT fd=%v", fd);
+    }
+#else
+    #warning "SO_REUSEPORT is not supported by your OS"
+    srs_warn("SO_REUSEPORT is not supported util Linux kernel 3.9");
+#endif
+
+	return srs_success;
+}
+
+srs_error_t srs_fd_keepalive(int fd)
+{
+#ifdef SO_KEEPALIVE
+    int v = 1;
+    if (setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &v, sizeof(int)) == -1) {
+        return srs_error_new(ERROR_SOCKET_SETKEEPALIVE, "SO_KEEPALIVE fd=%d", fd);
+    }
+#endif
+
+	return srs_success;
 }
 
 srs_thread_t srs_thread_self()
@@ -104,11 +142,11 @@ srs_thread_t srs_thread_self()
     return (srs_thread_t)st_thread_self();
 }
 
-srs_error_t srs_socket_connect(string server, int port, int64_t tm, srs_netfd_t* pstfd)
+srs_error_t srs_tcp_connect(string server, int port, srs_utime_t tm, srs_netfd_t* pstfd)
 {
     st_utime_t timeout = ST_UTIME_NO_TIMEOUT;
-    if (tm != SRS_CONSTS_NO_TMMS) {
-        timeout = (st_utime_t)(tm * 1000);
+    if (tm != SRS_UTIME_NO_TIMEOUT) {
+        timeout = tm;
     }
     
     *pstfd = NULL;
@@ -136,6 +174,7 @@ srs_error_t srs_socket_connect(string server, int port, int64_t tm, srs_netfd_t*
     srs_assert(!stfd);
     stfd = st_netfd_open_socket(sock);
     if(stfd == NULL){
+        ::close(sock);
         return srs_error_new(ERROR_ST_OPEN_SOCKET, "open socket");
     }
     
@@ -146,6 +185,126 @@ srs_error_t srs_socket_connect(string server, int port, int64_t tm, srs_netfd_t*
     
     *pstfd = stfd;
     return srs_success;
+}
+
+srs_error_t srs_tcp_listen(std::string ip, int port, srs_netfd_t* pfd)
+{
+	srs_error_t err = srs_success;
+
+    char sport[8];
+    snprintf(sport, sizeof(sport), "%d", port);
+
+    addrinfo hints;
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family   = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags    = AI_NUMERICHOST;
+
+    addrinfo* r = NULL;
+    SrsAutoFree(addrinfo, r);
+    if(getaddrinfo(ip.c_str(), sport, (const addrinfo*)&hints, &r)) {
+        return srs_error_new(ERROR_SYSTEM_IP_INVALID, "getaddrinfo hints=(%d,%d,%d)",
+            hints.ai_family, hints.ai_socktype, hints.ai_flags);
+    }
+
+    int fd = 0;
+    if ((fd = socket(r->ai_family, r->ai_socktype, r->ai_protocol)) == -1) {
+        return srs_error_new(ERROR_SOCKET_CREATE, "socket domain=%d, type=%d, protocol=%d",
+            r->ai_family, r->ai_socktype, r->ai_protocol);
+    }
+
+    // Detect alive for TCP connection.
+    // @see https://github.com/ossrs/srs/issues/1044
+    if ((err = srs_fd_keepalive(fd)) != srs_success) {
+        ::close(fd);
+        return srs_error_wrap(err, "set keepalive fd=%d", fd);
+    }
+
+    if ((err = srs_fd_closeexec(fd)) != srs_success) {
+        ::close(fd);
+        return srs_error_wrap(err, "set closeexec fd=%d", fd);
+    }
+
+    if ((err = srs_fd_reuseaddr(fd)) != srs_success) {
+        ::close(fd);
+        return srs_error_wrap(err, "set reuseaddr fd=%d", fd);
+    }
+
+    if ((err = srs_fd_reuseport(fd)) != srs_success) {
+        ::close(fd);
+        return srs_error_wrap(err, "set reuseport fd=%d", fd);
+    }
+
+    if (bind(fd, r->ai_addr, r->ai_addrlen) == -1) {
+        ::close(fd);
+        return srs_error_new(ERROR_SOCKET_BIND, "bind fd=%d", fd);
+    }
+
+    if (::listen(fd, SERVER_LISTEN_BACKLOG) == -1) {
+        ::close(fd);
+        return srs_error_new(ERROR_SOCKET_LISTEN, "listen fd=%d", fd);
+    }
+
+    if ((*pfd = srs_netfd_open_socket(fd)) == NULL){
+        ::close(fd);
+        return srs_error_new(ERROR_ST_OPEN_SOCKET, "st open fd=%d", fd);
+    }
+
+    return err;
+}
+
+srs_error_t srs_udp_listen(std::string ip, int port, srs_netfd_t* pfd)
+{
+	srs_error_t err = srs_success;
+
+    char sport[8];
+    snprintf(sport, sizeof(sport), "%d", port);
+
+    addrinfo hints;
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family   = AF_UNSPEC;
+    hints.ai_socktype = SOCK_DGRAM;
+    hints.ai_flags    = AI_NUMERICHOST;
+
+    addrinfo* r  = NULL;
+    SrsAutoFree(addrinfo, r);
+    if(getaddrinfo(ip.c_str(), sport, (const addrinfo*)&hints, &r)) {
+        return srs_error_new(ERROR_SYSTEM_IP_INVALID, "getaddrinfo hints=(%d,%d,%d)",
+            hints.ai_family, hints.ai_socktype, hints.ai_flags);
+    }
+
+	int fd = 0;
+    if ((fd = socket(r->ai_family, r->ai_socktype, r->ai_protocol)) == -1) {
+        return srs_error_new(ERROR_SOCKET_CREATE, "socket domain=%d, type=%d, protocol=%d",
+            r->ai_family, r->ai_socktype, r->ai_protocol);
+    }
+
+    if ((err = srs_fd_closeexec(fd)) != srs_success) {
+        ::close(fd);
+        return srs_error_wrap(err, "set closeexec fd=%d", fd);
+    }
+
+    if ((err = srs_fd_reuseaddr(fd)) != srs_success) {
+        ::close(fd);
+        return srs_error_wrap(err, "set reuseaddr fd=%d", fd);
+    }
+
+    if ((err = srs_fd_reuseport(fd)) != srs_success) {
+        ::close(fd);
+        return srs_error_wrap(err, "set reuseport fd=%d", fd);
+    }
+
+    if (bind(fd, r->ai_addr, r->ai_addrlen) == -1) {
+        ::close(fd);
+        return srs_error_new(ERROR_SOCKET_BIND, "bind fd=%d", fd);
+    }
+
+    if ((*pfd = srs_netfd_open_socket(fd)) == NULL){
+        ::close(fd);
+        return srs_error_new(ERROR_ST_OPEN_SOCKET, "st open fd=%d", fd);
+    }
+
+    return err;
 }
 
 srs_cond_t srs_cond_new()
@@ -228,10 +387,15 @@ ssize_t srs_read(srs_netfd_t stfd, void *buf, size_t nbyte, srs_utime_t timeout)
     return st_read((st_netfd_t)stfd, buf, nbyte, (st_utime_t)timeout);
 }
 
+bool srs_is_never_timeout(srs_utime_t tm)
+{
+    return tm == SRS_UTIME_NO_TIMEOUT;
+}
+
 SrsStSocket::SrsStSocket()
 {
     stfd = NULL;
-    stm = rtm = SRS_CONSTS_NO_TMMS;
+    stm = rtm = SRS_UTIME_NO_TIMEOUT;
     rbytes = sbytes = 0;
 }
 
@@ -245,27 +409,22 @@ srs_error_t SrsStSocket::initialize(srs_netfd_t fd)
     return srs_success;
 }
 
-bool SrsStSocket::is_never_timeout(int64_t tm)
-{
-    return tm == SRS_CONSTS_NO_TMMS;
-}
-
-void SrsStSocket::set_recv_timeout(int64_t tm)
+void SrsStSocket::set_recv_timeout(srs_utime_t tm)
 {
     rtm = tm;
 }
 
-int64_t SrsStSocket::get_recv_timeout()
+srs_utime_t SrsStSocket::get_recv_timeout()
 {
     return rtm;
 }
 
-void SrsStSocket::set_send_timeout(int64_t tm)
+void SrsStSocket::set_send_timeout(srs_utime_t tm)
 {
     stm = tm;
 }
 
-int64_t SrsStSocket::get_send_timeout()
+srs_utime_t SrsStSocket::get_send_timeout()
 {
     return stm;
 }
@@ -285,10 +444,10 @@ srs_error_t SrsStSocket::read(void* buf, size_t size, ssize_t* nread)
     srs_error_t err = srs_success;
     
     ssize_t nb_read;
-    if (rtm == SRS_CONSTS_NO_TMMS) {
+    if (rtm == SRS_UTIME_NO_TIMEOUT) {
         nb_read = st_read((st_netfd_t)stfd, buf, size, ST_UTIME_NO_TIMEOUT);
     } else {
-        nb_read = st_read((st_netfd_t)stfd, buf, size, rtm * 1000);
+        nb_read = st_read((st_netfd_t)stfd, buf, size, rtm);
     }
     
     if (nread) {
@@ -301,7 +460,7 @@ srs_error_t SrsStSocket::read(void* buf, size_t size, ssize_t* nread)
     if (nb_read <= 0) {
         // @see https://github.com/ossrs/srs/issues/200
         if (nb_read < 0 && errno == ETIME) {
-            return srs_error_new(ERROR_SOCKET_TIMEOUT, "timeout %d ms", (int)rtm);
+            return srs_error_new(ERROR_SOCKET_TIMEOUT, "timeout %d ms", srsu2msi(rtm));
         }
         
         if (nb_read == 0) {
@@ -321,10 +480,10 @@ srs_error_t SrsStSocket::read_fully(void* buf, size_t size, ssize_t* nread)
     srs_error_t err = srs_success;
     
     ssize_t nb_read;
-    if (rtm == SRS_CONSTS_NO_TMMS) {
+    if (rtm == SRS_UTIME_NO_TIMEOUT) {
         nb_read = st_read_fully((st_netfd_t)stfd, buf, size, ST_UTIME_NO_TIMEOUT);
     } else {
-        nb_read = st_read_fully((st_netfd_t)stfd, buf, size, rtm * 1000);
+        nb_read = st_read_fully((st_netfd_t)stfd, buf, size, rtm);
     }
     
     if (nread) {
@@ -337,7 +496,7 @@ srs_error_t SrsStSocket::read_fully(void* buf, size_t size, ssize_t* nread)
     if (nb_read != (ssize_t)size) {
         // @see https://github.com/ossrs/srs/issues/200
         if (nb_read < 0 && errno == ETIME) {
-            return srs_error_new(ERROR_SOCKET_TIMEOUT, "timeout %d ms", (int)rtm);
+            return srs_error_new(ERROR_SOCKET_TIMEOUT, "timeout %d ms", srsu2msi(rtm));
         }
         
         if (nb_read >= 0) {
@@ -357,10 +516,10 @@ srs_error_t SrsStSocket::write(void* buf, size_t size, ssize_t* nwrite)
     srs_error_t err = srs_success;
     
     ssize_t nb_write;
-    if (stm == SRS_CONSTS_NO_TMMS) {
+    if (stm == SRS_UTIME_NO_TIMEOUT) {
         nb_write = st_write((st_netfd_t)stfd, buf, size, ST_UTIME_NO_TIMEOUT);
     } else {
-        nb_write = st_write((st_netfd_t)stfd, buf, size, stm * 1000);
+        nb_write = st_write((st_netfd_t)stfd, buf, size, stm);
     }
     
     if (nwrite) {
@@ -372,7 +531,7 @@ srs_error_t SrsStSocket::write(void* buf, size_t size, ssize_t* nwrite)
     if (nb_write <= 0) {
         // @see https://github.com/ossrs/srs/issues/200
         if (nb_write < 0 && errno == ETIME) {
-            return srs_error_new(ERROR_SOCKET_TIMEOUT, "write timeout %d ms", stm);
+            return srs_error_new(ERROR_SOCKET_TIMEOUT, "write timeout %d ms", srsu2msi(stm));
         }
         
         return srs_error_new(ERROR_SOCKET_WRITE, "write");
@@ -388,10 +547,10 @@ srs_error_t SrsStSocket::writev(const iovec *iov, int iov_size, ssize_t* nwrite)
     srs_error_t err = srs_success;
     
     ssize_t nb_write;
-    if (stm == SRS_CONSTS_NO_TMMS) {
+    if (stm == SRS_UTIME_NO_TIMEOUT) {
         nb_write = st_writev((st_netfd_t)stfd, iov, iov_size, ST_UTIME_NO_TIMEOUT);
     } else {
-        nb_write = st_writev((st_netfd_t)stfd, iov, iov_size, stm * 1000);
+        nb_write = st_writev((st_netfd_t)stfd, iov, iov_size, stm);
     }
     
     if (nwrite) {
@@ -403,7 +562,7 @@ srs_error_t SrsStSocket::writev(const iovec *iov, int iov_size, ssize_t* nwrite)
     if (nb_write <= 0) {
         // @see https://github.com/ossrs/srs/issues/200
         if (nb_write < 0 && errno == ETIME) {
-            return srs_error_new(ERROR_SOCKET_TIMEOUT, "writev timeout %d ms", stm);
+            return srs_error_new(ERROR_SOCKET_TIMEOUT, "writev timeout %d ms", srsu2msi(stm));
         }
         
         return srs_error_new(ERROR_SOCKET_WRITE, "writev");
@@ -414,7 +573,7 @@ srs_error_t SrsStSocket::writev(const iovec *iov, int iov_size, ssize_t* nwrite)
     return err;
 }
 
-SrsTcpClient::SrsTcpClient(string h, int p, int64_t tm)
+SrsTcpClient::SrsTcpClient(string h, int p, srs_utime_t tm)
 {
     stfd = NULL;
     io = new SrsStSocket();
@@ -438,8 +597,8 @@ srs_error_t SrsTcpClient::connect()
     close();
     
     srs_assert(stfd == NULL);
-    if ((err = srs_socket_connect(host, port, timeout, &stfd)) != srs_success) {
-        return srs_error_wrap(err, "tcp: connect %s:%d to=%d", host.c_str(), port, (int)timeout);
+    if ((err = srs_tcp_connect(host, port, timeout, &stfd)) != srs_success) {
+        return srs_error_wrap(err, "tcp: connect %s:%d to=%dms", host.c_str(), port, srsu2msi(timeout));
     }
     
     if ((err = io->initialize(stfd)) != srs_success) {
@@ -459,27 +618,22 @@ void SrsTcpClient::close()
     srs_close_stfd(stfd);
 }
 
-bool SrsTcpClient::is_never_timeout(int64_t tm)
-{
-    return io->is_never_timeout(tm);
-}
-
-void SrsTcpClient::set_recv_timeout(int64_t tm)
+void SrsTcpClient::set_recv_timeout(srs_utime_t tm)
 {
     io->set_recv_timeout(tm);
 }
 
-int64_t SrsTcpClient::get_recv_timeout()
+srs_utime_t SrsTcpClient::get_recv_timeout()
 {
     return io->get_recv_timeout();
 }
 
-void SrsTcpClient::set_send_timeout(int64_t tm)
+void SrsTcpClient::set_send_timeout(srs_utime_t tm)
 {
     io->set_send_timeout(tm);
 }
 
-int64_t SrsTcpClient::get_send_timeout()
+srs_utime_t SrsTcpClient::get_send_timeout()
 {
     return io->get_send_timeout();
 }

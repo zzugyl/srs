@@ -79,34 +79,10 @@ fi
 echo "" >> $SRS_AUTO_HEADERS_H
 
 # auto headers in depends.
-if [ $SRS_STREAM_CASTER = YES ]; then
-    srs_define_macro "SRS_AUTO_STREAM_CASTER" $SRS_AUTO_HEADERS_H
-else
-    srs_undefine_macro "SRS_AUTO_STREAM_CASTER" $SRS_AUTO_HEADERS_H
-fi
-
-if [ $SRS_KAFKA = YES ]; then
-    srs_define_macro "SRS_AUTO_KAFKA" $SRS_AUTO_HEADERS_H
-else
-    srs_undefine_macro "SRS_AUTO_KAFKA" $SRS_AUTO_HEADERS_H
-fi
-
 if [ $SRS_NGINX = YES ]; then
     srs_define_macro "SRS_AUTO_NGINX" $SRS_AUTO_HEADERS_H
 else
     srs_undefine_macro "SRS_AUTO_NGINX" $SRS_AUTO_HEADERS_H
-fi
-
-if [ $SRS_DVR = YES ]; then
-    srs_define_macro "SRS_AUTO_DVR" $SRS_AUTO_HEADERS_H
-else
-    srs_undefine_macro "SRS_AUTO_DVR" $SRS_AUTO_HEADERS_H
-fi
-
-if [ $SRS_HLS = YES ]; then
-    srs_define_macro "SRS_AUTO_HLS" $SRS_AUTO_HEADERS_H
-else
-    srs_undefine_macro "SRS_AUTO_HLS" $SRS_AUTO_HEADERS_H
 fi
 
 if [ $SRS_HDS = YES ]; then
@@ -115,16 +91,16 @@ else
     srs_undefine_macro "SRS_AUTO_HDS" $SRS_AUTO_HEADERS_H
 fi
 
-if [ $SRS_SSL = YES ]; then
-    srs_define_macro "SRS_AUTO_SSL" $SRS_AUTO_HEADERS_H
-else
-    srs_undefine_macro "SRS_AUTO_SSL" $SRS_AUTO_HEADERS_H
-fi
-
 if [ $SRS_MEM_WATCH = YES ]; then
     srs_define_macro "SRS_AUTO_MEM_WATCH" $SRS_AUTO_HEADERS_H
 else
     srs_undefine_macro "SRS_AUTO_MEM_WATCH" $SRS_AUTO_HEADERS_H
+fi
+
+if [ $SRS_UTEST = YES ]; then
+    srs_define_macro "SRS_AUTO_UTEST" $SRS_AUTO_HEADERS_H
+else
+    srs_undefine_macro "SRS_AUTO_UTEST" $SRS_AUTO_HEADERS_H
 fi
 
 # whether compile ffmpeg tool
@@ -140,25 +116,6 @@ if [ $SRS_FFMPEG_STUB = YES ]; then
     srs_define_macro "SRS_AUTO_FFMPEG_STUB" $SRS_AUTO_HEADERS_H
 else
     srs_undefine_macro "SRS_AUTO_FFMPEG_STUB" $SRS_AUTO_HEADERS_H
-fi
-
-if [ $SRS_TRANSCODE = YES ]; then
-    srs_define_macro "SRS_AUTO_TRANSCODE" $SRS_AUTO_HEADERS_H
-else
-    srs_undefine_macro "SRS_AUTO_TRANSCODE" $SRS_AUTO_HEADERS_H
-fi
-
-if [ $SRS_INGEST = YES ]; then
-    srs_define_macro "SRS_AUTO_INGEST" $SRS_AUTO_HEADERS_H
-else
-    srs_undefine_macro "SRS_AUTO_INGEST" $SRS_AUTO_HEADERS_H
-fi
-
-# for statistic.
-if [ $SRS_STAT = YES ]; then
-    srs_define_macro "SRS_AUTO_STAT" $SRS_AUTO_HEADERS_H
-else
-    srs_undefine_macro "SRS_AUTO_STAT" $SRS_AUTO_HEADERS_H
 fi
 
 if [ $SRS_GPERF = YES ]; then
@@ -237,12 +194,16 @@ echo "" >> $SRS_AUTO_HEADERS_H
 #####################################################################################
 # generated the contributors from AUTHORS.txt
 #####################################################################################
-SRS_CONSTRIBUTORS=`cat ../AUTHORS.txt|grep "*"|awk '{print $2}'`
-echo "#define SRS_AUTO_CONSTRIBUTORS \"\\" >> $SRS_AUTO_HEADERS_H
-for CONTRIBUTOR in $SRS_CONSTRIBUTORS; do
-    echo "${CONTRIBUTOR} \\" >> $SRS_AUTO_HEADERS_H
-done
-echo "\"" >> $SRS_AUTO_HEADERS_H
+if [[ -f ../AUTHORS.txt ]]; then
+	SRS_CONSTRIBUTORS=`cat ../AUTHORS.txt|grep "*"|awk '{print $2}'`
+	echo "#define SRS_AUTO_CONSTRIBUTORS \"\\" >> $SRS_AUTO_HEADERS_H
+	for CONTRIBUTOR in $SRS_CONSTRIBUTORS; do
+	    echo "${CONTRIBUTOR} \\" >> $SRS_AUTO_HEADERS_H
+	done
+	echo "\"" >> $SRS_AUTO_HEADERS_H
+else
+	echo "#define SRS_AUTO_CONSTRIBUTORS \"ossrs\"" >> $SRS_AUTO_HEADERS_H
+fi
 
 # new empty line to auto headers file.
 echo "" >> $SRS_AUTO_HEADERS_H

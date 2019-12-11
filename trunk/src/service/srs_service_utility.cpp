@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2013-2018 Winlin
+ * Copyright (c) 2013-2019 Winlin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -150,6 +150,12 @@ void retrieve_local_ips()
     for (ifaddrs* p = ifap; p ; p = p->ifa_next) {
         ifaddrs* cur = p;
         
+        // Ignore if no address for this interface.
+        // @see https://github.com/ossrs/srs/issues/1087#issuecomment-408847115
+        if (!cur->ifa_addr) {
+            continue;
+        }
+        
         // retrieve IP address, ignore the tun0 network device, whose addr is NULL.
         // @see: https://github.com/ossrs/srs/issues/141
         bool ipv4 = (cur->ifa_addr->sa_family == AF_INET);
@@ -163,6 +169,12 @@ void retrieve_local_ips()
     // Then, discover IPv6 addresses.
     for (ifaddrs* p = ifap; p ; p = p->ifa_next) {
         ifaddrs* cur = p;
+        
+        // Ignore if no address for this interface.
+        // @see https://github.com/ossrs/srs/issues/1087#issuecomment-408847115
+        if (!cur->ifa_addr) {
+            continue;
+        }
         
         // retrieve IP address, ignore the tun0 network device, whose addr is NULL.
         // @see: https://github.com/ossrs/srs/issues/141
@@ -178,6 +190,12 @@ void retrieve_local_ips()
     if (ips.empty()) {
         for (ifaddrs* p = ifap; p ; p = p->ifa_next) {
             ifaddrs* cur = p;
+            
+            // Ignore if no address for this interface.
+            // @see https://github.com/ossrs/srs/issues/1087#issuecomment-408847115
+            if (!cur->ifa_addr) {
+                continue;
+            }
             
             // retrieve IP address, ignore the tun0 network device, whose addr is NULL.
             // @see: https://github.com/ossrs/srs/issues/141

@@ -1,7 +1,7 @@
 /*
 The MIT License (MIT)
 
-Copyright (c) 2013-2018 Winlin
+Copyright (c) 2013-2019 Winlin
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -29,6 +29,8 @@ using namespace std;
 #include <srs_kernel_error.hpp>
 #include <srs_app_source.hpp>
 #include <srs_core_performance.hpp>
+#include <srs_kernel_utility.hpp>
+#include <srs_service_st.hpp>
 
 MockSrsConfigBuffer::MockSrsConfigBuffer(string buf)
 {
@@ -83,8 +85,6 @@ srs_error_t MockSrsConfig::parse(string buf)
     
     return err;
 }
-
-#ifdef ENABLE_UTEST_CONFIG
 
 VOID TEST(ConfigTest, CheckMacros)
 {
@@ -1806,5 +1806,124 @@ VOID TEST(ConfigMainTest, CheckConf_vhost_ingest_id)
     EXPECT_TRUE(ERROR_SUCCESS != conf.parse(_MIN_OK_CONF"vhost v{ingest{} ingest{}}"));
 }
 
-#endif
+VOID TEST(ConfigUnitTest, CheckDefaultValuesVhost)
+{
+    MockSrsConfig conf;
+
+    if (true) {
+	    EXPECT_TRUE(ERROR_SUCCESS == conf.parse(_MIN_OK_CONF));
+	    EXPECT_EQ(30 * SRS_UTIME_SECONDS, conf.get_bw_check_interval(""));
+
+	    EXPECT_TRUE(ERROR_SUCCESS == conf.parse(_MIN_OK_CONF"vhost v{bandcheck{interval 4;}}"));
+	    EXPECT_EQ(4 * SRS_UTIME_SECONDS, conf.get_bw_check_interval("v"));
+    }
+
+    if (true) {
+	    EXPECT_TRUE(ERROR_SUCCESS == conf.parse(_MIN_OK_CONF));
+	    EXPECT_EQ(3 * SRS_UTIME_SECONDS, conf.get_dash_fragment(""));
+	    EXPECT_EQ(30 * SRS_UTIME_SECONDS, conf.get_dash_update_period(""));
+	    EXPECT_EQ(60 * SRS_UTIME_SECONDS, conf.get_dash_timeshift(""));
+
+	    EXPECT_TRUE(ERROR_SUCCESS == conf.parse(_MIN_OK_CONF"vhost v{dash{dash_fragment 4;dash_update_period 40;dash_timeshift 70;}}"));
+	    EXPECT_EQ(4 * SRS_UTIME_SECONDS, conf.get_dash_fragment("v"));
+	    EXPECT_EQ(40 * SRS_UTIME_SECONDS, conf.get_dash_update_period("v"));
+	    EXPECT_EQ(70 * SRS_UTIME_SECONDS, conf.get_dash_timeshift("v"));
+    }
+
+    if (true) {
+	    EXPECT_TRUE(ERROR_SUCCESS == conf.parse(_MIN_OK_CONF));
+	    EXPECT_EQ(srs_utime_t(9.9 * SRS_UTIME_SECONDS), conf.get_heartbeat_interval());
+
+	    EXPECT_TRUE(ERROR_SUCCESS == conf.parse(_MIN_OK_CONF"heartbeat{interval 10;}"));
+	    EXPECT_EQ(10 * SRS_UTIME_SECONDS, conf.get_heartbeat_interval());
+    }
+
+    if (true) {
+	    EXPECT_TRUE(ERROR_SUCCESS == conf.parse(_MIN_OK_CONF));
+	    EXPECT_EQ(10 * SRS_UTIME_SECONDS, conf.get_pithy_print());
+
+	    EXPECT_TRUE(ERROR_SUCCESS == conf.parse(_MIN_OK_CONF"pithy_print_ms 20000;"));
+	    EXPECT_EQ(20 * SRS_UTIME_SECONDS, conf.get_pithy_print());
+    }
+
+    if (true) {
+	    EXPECT_TRUE(ERROR_SUCCESS == conf.parse(_MIN_OK_CONF));
+	    EXPECT_EQ(350 * SRS_UTIME_MILLISECONDS, conf.get_mr_sleep(""));
+	    EXPECT_EQ(350 * SRS_UTIME_MILLISECONDS, conf.get_mw_sleep(""));
+	    EXPECT_EQ(20 * SRS_UTIME_SECONDS, conf.get_publish_1stpkt_timeout(""));
+	    EXPECT_EQ(5 * SRS_UTIME_SECONDS, conf.get_publish_normal_timeout(""));
+
+	    EXPECT_TRUE(ERROR_SUCCESS == conf.parse(_MIN_OK_CONF"vhost v{publish{mr_latency 1000; firstpkt_timeout 100; normal_timeout 100;} play{mw_latency 1000;}}"));
+	    EXPECT_EQ(1000 * SRS_UTIME_MILLISECONDS, conf.get_mr_sleep("v"));
+	    EXPECT_EQ(100 * SRS_UTIME_MILLISECONDS, conf.get_publish_1stpkt_timeout("v"));
+	    EXPECT_EQ(100 * SRS_UTIME_MILLISECONDS, conf.get_publish_normal_timeout("v"));
+    }
+
+    if (true) {
+	    EXPECT_TRUE(ERROR_SUCCESS == conf.parse(_MIN_OK_CONF));
+	    EXPECT_EQ(30 * SRS_UTIME_SECONDS, conf.get_dvr_duration(""));
+
+	    EXPECT_TRUE(ERROR_SUCCESS == conf.parse(_MIN_OK_CONF"vhost v{dvr{dvr_duration 10;}}"));
+	    EXPECT_EQ(10 * SRS_UTIME_SECONDS, conf.get_dvr_duration("v"));
+    }
+
+    if (true) {
+	    EXPECT_TRUE(ERROR_SUCCESS == conf.parse(_MIN_OK_CONF));
+	    EXPECT_EQ(0, conf.get_hls_dispose(""));
+	    EXPECT_EQ(10 * SRS_UTIME_SECONDS, conf.get_hls_fragment(""));
+	    EXPECT_EQ(60 * SRS_UTIME_SECONDS, conf.get_hls_window(""));
+
+	    EXPECT_TRUE(ERROR_SUCCESS == conf.parse(_MIN_OK_CONF"vhost v{hls{hls_dispose 10;hls_fragment 20;hls_window 30;}}"));
+	    EXPECT_EQ(10 * SRS_UTIME_SECONDS, conf.get_hls_dispose("v"));
+	    EXPECT_EQ(20 * SRS_UTIME_SECONDS, conf.get_hls_fragment("v"));
+	    EXPECT_EQ(30 * SRS_UTIME_SECONDS, conf.get_hls_window("v"));
+    }
+
+    if (true) {
+	    EXPECT_TRUE(ERROR_SUCCESS == conf.parse(_MIN_OK_CONF));
+	    EXPECT_EQ(10 * SRS_UTIME_SECONDS, conf.get_hds_fragment(""));
+	    EXPECT_EQ(60 * SRS_UTIME_SECONDS, conf.get_hds_window(""));
+
+	    EXPECT_TRUE(ERROR_SUCCESS == conf.parse(_MIN_OK_CONF"vhost v{hds{hds_fragment 20;hds_window 30;}}"));
+	    EXPECT_EQ(20 * SRS_UTIME_SECONDS, conf.get_hds_fragment("v"));
+	    EXPECT_EQ(30 * SRS_UTIME_SECONDS, conf.get_hds_window("v"));
+    }
+
+    if (true) {
+	    EXPECT_TRUE(ERROR_SUCCESS == conf.parse(_MIN_OK_CONF));
+	    EXPECT_EQ(30 * SRS_UTIME_SECONDS, conf.get_queue_length(""));
+	    EXPECT_EQ(0, conf.get_send_min_interval(""));
+
+	    EXPECT_TRUE(ERROR_SUCCESS == conf.parse(_MIN_OK_CONF"vhost v{play{queue_length 100;send_min_interval 10;}}"));
+	    EXPECT_EQ(100 * SRS_UTIME_SECONDS, conf.get_queue_length("v"));
+	    EXPECT_EQ(10 * SRS_UTIME_MILLISECONDS, conf.get_send_min_interval("v"));
+    }
+
+    if (true) {
+	    EXPECT_TRUE(ERROR_SUCCESS == conf.parse(_MIN_OK_CONF));
+	    EXPECT_EQ(0, conf.get_vhost_http_remux_fast_cache(""));
+
+	    EXPECT_TRUE(ERROR_SUCCESS == conf.parse(_MIN_OK_CONF"vhost v{http_remux{fast_cache 10;}}"));
+	    EXPECT_EQ(10 * SRS_UTIME_SECONDS, conf.get_vhost_http_remux_fast_cache("v"));
+    }
+}
+
+VOID TEST(ConfigUnitTest, CheckDefaultValuesGlobal)
+{
+    if (true) {
+        srs_utime_t t0 = srs_update_system_time();
+        srs_usleep(10 * SRS_UTIME_MILLISECONDS);
+        srs_utime_t t1 = srs_update_system_time();
+
+        EXPECT_TRUE(t1 - t0 >= 10 * SRS_UTIME_MILLISECONDS);
+    }
+
+    if (true) {
+        srs_utime_t t0 = srs_get_system_time();
+        srs_utime_t t1 = srs_update_system_time();
+
+        EXPECT_TRUE(t0 > 0);
+        EXPECT_TRUE(t1 >= t0);
+    }
+}
 

@@ -428,15 +428,15 @@ SED="sed_utility" && echo "SED is $SED"
 #####################################################################################
 # check the os.
 #####################################################################################
-# user must specifies something what a fuck, we suppport following os:
-#       centos/ubuntu/osx,
+# Only supports:
+#       linux, centos/ubuntu as such,
 #       cross build for embeded system, for example, mips or arm,
 #       directly build on arm/mips, for example, pi or cubie,
 #       export srs-librtmp
 # others is invalid.
 if [[ $OS_IS_UBUNTU = NO && $OS_IS_CENTOS = NO && $OS_IS_OSX = NO && $SRS_EXPORT_LIBRTMP_PROJECT = NO ]]; then
     if [[ $SRS_PI = NO && $SRS_CUBIE = NO && $SRS_CROSS_BUILD = NO ]]; then
-        echo "What a fuck, your OS `uname -s` is not supported."
+        echo "Your OS `uname -s` is not supported."
         exit 1
     fi
 fi
@@ -464,6 +464,7 @@ if [ $SRS_EXPORT_LIBRTMP_PROJECT = NO ]; then
             (
                 rm -rf ${SRS_OBJS}/state-threads-1.9.1 && cd ${SRS_OBJS} &&
                 tar xf ../3rdparty/state-threads-1.9.1.tar.gz && cd state-threads-1.9.1 && chmod +w * &&
+                patch -p0 < ../../3rdparty/patches/6.st.osx10.14.build.patch &&
                 make ${_ST_MAKE} CC=${SrsArmCC} AR=${SrsArmAR} LD=${SrsArmLD} RANDLIB=${SrsArmRANDLIB} EXTRA_CFLAGS="${_ST_EXTRA_CFLAGS}" &&
                 cd .. && rm -f st && ln -sf state-threads-1.9.1/obj st &&
                 rm -f state-threads && ln -sf state-threads-1.9.1 state-threads &&
@@ -478,6 +479,7 @@ if [ $SRS_EXPORT_LIBRTMP_PROJECT = NO ]; then
             (
                 rm -rf ${SRS_OBJS}/state-threads-1.9.1 && cd ${SRS_OBJS} &&
                 tar xf ../3rdparty/state-threads-1.9.1.tar.gz && cd state-threads-1.9.1 && chmod +w * &&
+                patch -p0 < ../../3rdparty/patches/6.st.osx10.14.build.patch &&
                 make ${_ST_MAKE} EXTRA_CFLAGS="${_ST_EXTRA_CFLAGS}" &&
                 cd .. && rm -f st && ln -sf state-threads-1.9.1/obj st &&
                 rm -f state-threads && ln -sf state-threads-1.9.1 state-threads &&
@@ -566,12 +568,11 @@ if [ $SRS_EXPORT_LIBRTMP_PROJECT = NO ]; then
     if [[ -f ${SRS_OBJS}/CherryPy-3.2.4/setup.py ]]; then
         echo "CherryPy-3.2.4 is ok.";
     else
-        require_sudoer "install CherryPy-3.2.4"
         echo "Installing CherryPy-3.2.4";
         (
-            sudo rm -rf ${SRS_OBJS}/CherryPy-3.2.4 && cd ${SRS_OBJS} && 
+            rm -rf ${SRS_OBJS}/CherryPy-3.2.4 && cd ${SRS_OBJS} &&
             unzip -q ../3rdparty/CherryPy-3.2.4.zip && cd CherryPy-3.2.4 && 
-            sudo python setup.py install
+            python setup.py install --user
         )
     fi
     # check status
@@ -625,6 +626,12 @@ OPENSSL_HOTFIX="-DOPENSSL_NO_HEARTBEATS"
 # Affected users should upgrade to OpenSSL 1.1.0e. Users unable to immediately
 # upgrade can alternatively recompile OpenSSL with -DOPENSSL_NO_HEARTBEATS.
 if [ $SRS_SSL = YES ]; then
+    if [[ -f /usr/local/lib64/libssl.a && ! -f ${SRS_OBJS}/openssl/lib/libssl.a ]]; then
+        (mkdir -p  ${SRS_OBJS}/openssl/lib && cd ${SRS_OBJS}/openssl/lib && 
+            ln -sf /usr/local/lib64/libssl.a && ln -sf /usr/local/lib64/libcrypto.a)
+        (mkdir -p ${SRS_OBJS}/openssl/include && cd ${SRS_OBJS}/openssl/include &&
+            ln -sf /usr/local/include/openssl)
+    fi
     if [ $SRS_USE_SYS_SSL = YES ]; then
         echo "Warning: Use system libssl, without compiling openssl."
     else
@@ -669,13 +676,16 @@ if [ $SRS_SSL = YES ]; then
 fi
 
 #####################################################################################
-# live transcoding, ffmpeg-3.2.4, x264-core138, lame-3.99.5, libaacplus-2.0.2.
+# live transcoding, ffmpeg-4.1, x264-core157, lame-3.99.5, libaacplus-2.0.2.
 #####################################################################################
 if [ $SRS_FFMPEG_TOOL = YES ]; then
+    if [[ -f /usr/local/bin/ffmpeg && ! -f ${SRS_OBJS}/ffmpeg/bin/ffmpeg ]]; then
+        mkdir -p ${SRS_OBJS}/ffmpeg/bin && ln -sf /usr/local/bin/ffmpeg ${SRS_OBJS}/ffmpeg/bin/ffmpeg
+    fi
     if [[ -f ${SRS_OBJS}/ffmpeg/bin/ffmpeg ]]; then
-        echo "ffmpeg-3.2.4 is ok.";
+        echo "ffmpeg-4.1 is ok.";
     else
-        echo "build ffmpeg-3.2.4";
+        echo "build ffmpeg-4.1"; 
         (
             cd ${SRS_OBJS} && pwd_dir=`pwd` && 
             rm -rf ffmepg.src && mkdir -p ffmpeg.src && cd ffmpeg.src &&
@@ -684,8 +694,8 @@ if [ $SRS_FFMPEG_TOOL = YES ]; then
         )
     fi
     # check status
-    ret=$?; if [[ $ret -ne 0 ]]; then echo "build ffmpeg-3.2.4 failed, ret=$ret"; exit $ret; fi
-    if [ ! -f ${SRS_OBJS}/ffmpeg/bin/ffmpeg ]; then echo "build ffmpeg-3.2.4 failed."; exit -1; fi
+    ret=$?; if [[ $ret -ne 0 ]]; then echo "build ffmpeg-4.1 failed, ret=$ret"; exit $ret; fi
+    if [ ! -f ${SRS_OBJS}/ffmpeg/bin/ffmpeg ]; then echo "build ffmpeg-4.1 failed."; exit -1; fi
 fi
 
 #####################################################################################
@@ -703,11 +713,13 @@ if [ $SRS_EXPORT_LIBRTMP_PROJECT = NO ]; then
     fi
 fi
 
-if [ $SRS_LIBRTMP = YES ]; then
+if [[ $SRS_LIBRTMP == YES ]]; then
     mkdir -p ${SRS_OBJS}/research
     
     # librtmp
-    (cd ${SRS_WORKDIR}/research/librtmp && mkdir -p objs && ln -sf `pwd`/objs ../../${SRS_OBJS_DIR}/research/librtmp)
+    (cd ${SRS_WORKDIR}/research/librtmp && mkdir -p objs &&
+        rm -rf ../../${SRS_OBJS_DIR}/research/librtmp &&
+        ln -sf `pwd`/objs ../../${SRS_OBJS_DIR}/research/librtmp)
     ret=$?; if [[ $ret -ne 0 ]]; then echo "Link research/librtmp failed, ret=$ret"; exit $ret; fi
 fi
 

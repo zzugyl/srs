@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2013-2018 Winlin
+ * Copyright (c) 2013-2019 Winlin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -31,7 +31,7 @@
 #include <srs_app_st.hpp>
 #include <srs_app_thread.hpp>
 
-class ISrsProtocolReaderWriter;
+class ISrsProtocolReadWriter;
 class SrsSharedPtrMessage;
 class SrsOnMetaDataPacket;
 class SrsMessageQueue;
@@ -43,14 +43,11 @@ class SrsOriginHub;
 class SrsKbps;
 class SrsSimpleRtmpClient;
 
-/**
- * forward the stream to other servers.
- */
-// TODO: FIXME: refine the error log, comments it.
+// Forward the stream to other servers.
 class SrsForwarder : public ISrsCoroutineHandler
 {
 private:
-    // the ep to forward, server[:port].
+    // The ep to forward, server[:port].
     std::string ep_forward;
     SrsRequest* req;
 private:
@@ -60,10 +57,8 @@ private:
     SrsSimpleRtmpClient* sdk;
     SrsRtmpJitter* jitter;
     SrsMessageQueue* queue;
-    /**
-     * cache the sequence header for retry when slave is failed.
-     * @see https://github.com/ossrs/srs/issues/150
-     */
+    // Cache the sequence header for retry when slave is failed.
+    // @see https://github.com/ossrs/srs/issues/150
     SrsSharedPtrMessage* sh_audio;
     SrsSharedPtrMessage* sh_video;
 public:
@@ -71,26 +66,20 @@ public:
     virtual ~SrsForwarder();
 public:
     virtual srs_error_t initialize(SrsRequest* r, std::string ep);
-    virtual void set_queue_size(double queue_size);
+    virtual void set_queue_size(srs_utime_t queue_size);
 public:
     virtual srs_error_t on_publish();
     virtual void on_unpublish();
-    /**
-     * forward the audio packet.
-     * @param shared_metadata, directly ptr, copy it if need to save it.
-     */
+    // Forward the audio packet.
+    // @param shared_metadata, directly ptr, copy it if need to save it.
     virtual srs_error_t on_meta_data(SrsSharedPtrMessage* shared_metadata);
-    /**
-     * forward the audio packet.
-     * @param shared_audio, directly ptr, copy it if need to save it.
-     */
+    // Forward the audio packet.
+    // @param shared_audio, directly ptr, copy it if need to save it.
     virtual srs_error_t on_audio(SrsSharedPtrMessage* shared_audio);
-    /**
-     * forward the video packet.
-     * @param shared_video, directly ptr, copy it if need to save it.
-     */
+    // Forward the video packet.
+    // @param shared_video, directly ptr, copy it if need to save it.
     virtual srs_error_t on_video(SrsSharedPtrMessage* shared_video);
-// interface ISrsReusableThread2Handler.
+// Interface ISrsReusableThread2Handler.
 public:
     virtual srs_error_t cycle();
 private:

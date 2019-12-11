@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2013-2018 Winlin
+ * Copyright (c) 2013-2019 Winlin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -54,25 +54,18 @@ class SrsSecurity;
 class ISrsWakable;
 class SrsCommonMessage;
 class SrsPacket;
-#ifdef SRS_AUTO_KAFKA
-class ISrsKafkaCluster;
-#endif
 
-/**
- * The simple rtmp client for SRS.
- */
+// The simple rtmp client for SRS.
 class SrsSimpleRtmpClient : public SrsBasicRtmpClient
 {
 public:
-    SrsSimpleRtmpClient(std::string u, int64_t ctm, int64_t stm);
+    SrsSimpleRtmpClient(std::string u, srs_utime_t ctm, srs_utime_t stm);
     virtual ~SrsSimpleRtmpClient();
 protected:
     virtual srs_error_t connect_app();
 };
 
-/**
- * Some information of client.
- */
+// Some information of client.
 class SrsClientInfo
 {
 public:
@@ -89,12 +82,10 @@ public:
     virtual ~SrsClientInfo();
 };
 
-/**
- * the client provides the main logic control for RTMP clients.
- */
-class SrsRtmpConn : public virtual SrsConnection, public virtual ISrsReloadHandler
+// The client provides the main logic control for RTMP clients.
+class SrsRtmpConn : virtual public SrsConnection, virtual public ISrsReloadHandler
 {
-    // for the thread to directly access any field of connection.
+    // For the thread to directly access any field of connection.
     friend class SrsPublishRecvThread;
 private:
     SrsServer* server;
@@ -102,28 +93,27 @@ private:
     SrsRefer* refer;
     SrsBandwidth* bandwidth;
     SrsSecurity* security;
-    // the wakable handler, maybe NULL.
+    // The wakable handler, maybe NULL.
     // TODO: FIXME: Should refine the state for receiving thread.
     ISrsWakable* wakable;
-    // elapse duration in ms
-    // for live play duration, for instance, rtmpdump to record.
+    // The elapsed duration in srs_utime_t
+    // For live play duration, for instance, rtmpdump to record.
     // @see https://github.com/ossrs/srs/issues/47
-    int64_t duration;
-    SrsKbps* kbps;
-    // the MR(merged-write) sleep time in ms.
-    int mw_sleep;
-    // the MR(merged-write) only enabled for play.
+    srs_utime_t duration;
+    // The MR(merged-write) sleep time in srs_utime_t.
+    srs_utime_t mw_sleep;
+    // The MR(merged-write) only enabled for play.
     int mw_enabled;
-    // for realtime
+    // For realtime
     // @see https://github.com/ossrs/srs/issues/257
     bool realtime;
-    // the minimal interval in ms for delivery stream.
-    double send_min_interval;
-    // publish 1st packet timeout in ms
-    int publish_1stpkt_timeout;
-    // publish normal packet timeout in ms
-    int publish_normal_timeout;
-    // whether enable the tcp_nodelay.
+    // The minimal interval in srs_utime_t for delivery stream.
+    srs_utime_t send_min_interval;
+    // The publish 1st packet timeout in srs_utime_t
+    srs_utime_t publish_1stpkt_timeout;
+    // The publish normal packet timeout in srs_utime_t
+    srs_utime_t publish_normal_timeout;
+    // Whether enable the tcp_nodelay.
     bool tcp_nodelay;
     // About the rtmp client.
     SrsClientInfo* info;
@@ -134,23 +124,20 @@ public:
     virtual void dispose();
 protected:
     virtual srs_error_t do_cycle();
-// interface ISrsReloadHandler
+// Interface ISrsReloadHandler
 public:
     virtual srs_error_t on_reload_vhost_removed(std::string vhost);
     virtual srs_error_t on_reload_vhost_play(std::string vhost);
     virtual srs_error_t on_reload_vhost_tcp_nodelay(std::string vhost);
     virtual srs_error_t on_reload_vhost_realtime(std::string vhost);
     virtual srs_error_t on_reload_vhost_publish(std::string vhost);
-// interface IKbpsDelta
+// Interface ISrsKbpsDelta
 public:
-    virtual void resample();
-    virtual int64_t get_send_bytes_delta();
-    virtual int64_t get_recv_bytes_delta();
-    virtual void cleanup();
+    virtual void remark(int64_t* in, int64_t* out);
 private:
-    // when valid and connected to vhost/app, service the client.
+    // When valid and connected to vhost/app, service the client.
     virtual srs_error_t service_cycle();
-    // stream(play/publish) service cycle, identify client first.
+    // The stream(play/publish) service cycle, identify client first.
     virtual srs_error_t stream_service_cycle();
     virtual srs_error_t check_vhost(bool try_default_vhost);
     virtual srs_error_t playing(SrsSource* source);
@@ -162,16 +149,14 @@ private:
     virtual srs_error_t handle_publish_message(SrsSource* source, SrsCommonMessage* msg);
     virtual srs_error_t process_publish_message(SrsSource* source, SrsCommonMessage* msg);
     virtual srs_error_t process_play_control_msg(SrsConsumer* consumer, SrsCommonMessage* msg);
-    virtual void change_mw_sleep(int sleep_ms);
+    virtual void change_mw_sleep(srs_utime_t sleep_v);
     virtual void set_sock_options();
 private:
     virtual srs_error_t check_edge_token_traverse_auth();
     virtual srs_error_t do_token_traverse_auth(SrsRtmpClient* client);
 private:
-    /**
-     * when the connection disconnect, call this method.
-     * e.g. log msg of connection and report to other system.
-     */
+    // When the connection disconnect, call this method.
+    // e.g. log msg of connection and report to other system.
     virtual srs_error_t on_disconnect();
 private:
     virtual srs_error_t http_hooks_on_connect();

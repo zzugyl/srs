@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2013-2018 Winlin
+ * Copyright (c) 2013-2019 Winlin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -49,18 +49,17 @@ using namespace std;
 #include <srs_app_caster_flv.hpp>
 #include <srs_core_mem_watch.hpp>
 #include <srs_kernel_consts.hpp>
-#include <srs_app_kafka.hpp>
 #include <srs_app_thread.hpp>
 #include <srs_app_coworkers.hpp>
 
-// system interval in ms,
+// system interval in srs_utime_t,
 // all resolution times should be times togother,
 // for example, system-interval is x=1s(1000ms),
 // then rusage can be 3*x, for instance, 3*1=3s,
 // the meminfo canbe 6*x, for instance, 6*1=6s,
 // for performance refine, @see: https://github.com/ossrs/srs/issues/194
 // @remark, recomment to 1000ms.
-#define SRS_SYS_CYCLE_INTERVAL 1000
+#define SRS_SYS_CYCLE_INTERVAL (1000 * SRS_UTIME_MILLISECONDS)
 
 // update time interval:
 //      SRS_SYS_CYCLE_INTERVAL * SRS_SYS_TIME_RESOLUTION_MS_TIMES
@@ -171,7 +170,6 @@ srs_error_t SrsBufferListener::on_tcp_client(srs_netfd_t stfd)
     return srs_success;
 }
 
-#ifdef SRS_AUTO_STREAM_CASTER
 SrsRtspListener::SrsRtspListener(SrsServer* svr, SrsListenerType t, SrsConfDirective* c) : SrsListener(svr, t)
 {
     listener = NULL;
@@ -281,7 +279,6 @@ srs_error_t SrsHttpFlvListener::on_tcp_client(srs_netfd_t stfd)
     
     return err;
 }
-#endif
 
 SrsUdpStreamListener::SrsUdpStreamListener(SrsServer* svr, SrsListenerType t, ISrsUdpHandler* c) : SrsListener(svr, t)
 {
@@ -323,7 +320,6 @@ srs_error_t SrsUdpStreamListener::listen(string i, int p)
     return err;
 }
 
-#ifdef SRS_AUTO_STREAM_CASTER
 SrsUdpCasterListener::SrsUdpCasterListener(SrsServer* svr, SrsListenerType t, SrsConfDirective* c) : SrsUdpStreamListener(svr, t, NULL)
 {
     // the caller already ensure the type is ok,
@@ -338,7 +334,6 @@ SrsUdpCasterListener::~SrsUdpCasterListener()
 {
     srs_freep(caster);
 }
-#endif
 
 SrsSignalManager* SrsSignalManager::instance = NULL;
 
@@ -485,10 +480,7 @@ SrsServer::SrsServer()
     http_api_mux = new SrsHttpServeMux();
     http_server = new SrsHttpServer(this);
     http_heartbeat = new SrsHttpHeartbeat();
-    
-#ifdef SRS_AUTO_INGEST
     ingester = new SrsIngester();
-#endif
 }
 
 SrsServer::~SrsServer()
@@ -505,10 +497,7 @@ void SrsServer::destroy()
     srs_freep(http_api_mux);
     srs_freep(http_server);
     srs_freep(http_heartbeat);
-    
-#ifdef SRS_AUTO_INGEST
     srs_freep(ingester);
-#endif
     
     if (pid_fd > 0) {
         ::close(pid_fd);
@@ -533,10 +522,6 @@ void SrsServer::dispose()
     
     // @remark don't dispose ingesters, for too slow.
     
-#ifdef SRS_AUTO_KAFKA
-    srs_dispose_kafka();
-#endif
-    
     // dispose the source for hls and dvr.
     SrsSource::dispose_all();
     
@@ -552,7 +537,7 @@ srs_error_t SrsServer::initialize(ISrsServerCycle* ch)
     srs_error_t err = srs_success;
     
     // ensure the time is ok.
-    srs_update_system_time_ms();
+    srs_update_system_time();
     
     // for the main objects(server, config, log, context),
     // never subscribe handler in constructor,
@@ -600,13 +585,6 @@ srs_error_t SrsServer::initialize_st()
     // set current log id.
     _srs_context->generate_id();
     
-    // initialize the conponents that depends on st.
-#ifdef SRS_AUTO_KAFKA
-    if ((err = srs_initialize_kafka()) != srs_success) {
-        return srs_error_wrap(err, "initialize kafka");
-    }
-#endif
-    
     // check asprocess.
     bool asprocess = _srs_config->get_asprocess();
     if (asprocess && ppid == 1) {
@@ -653,6 +631,7 @@ srs_error_t SrsServer::acquire_pid_file()
     
     if (fcntl(fd, F_SETLK, &lock) == -1) {
         if(errno == EACCES || errno == EAGAIN) {
+            ::close(fd);
             srs_error("srs is already running!");
             return srs_error_new(ERROR_SYSTEM_PID_ALREADY_RUNNING, "srs is already running");
         }
@@ -809,11 +788,9 @@ srs_error_t SrsServer::ingest()
 {
     srs_error_t err = srs_success;
     
-#ifdef SRS_AUTO_INGEST
     if ((err = ingester->start()) != srs_success) {
         return srs_error_wrap(err, "ingest start");
     }
-#endif
     
     return err;
 }
@@ -902,7 +879,6 @@ srs_error_t SrsServer::do_cycle()
     // find the max loop
     int max = srs_max(0, SRS_SYS_TIME_RESOLUTION_MS_TIMES);
     
-#ifdef SRS_AUTO_STAT
     max = srs_max(max, SRS_SYS_RUSAGE_RESOLUTION_TIMES);
     max = srs_max(max, SRS_SYS_CPU_STAT_RESOLUTION_TIMES);
     max = srs_max(max, SRS_SYS_DISK_STAT_RESOLUTION_TIMES);
@@ -910,12 +886,11 @@ srs_error_t SrsServer::do_cycle()
     max = srs_max(max, SRS_SYS_PLATFORM_INFO_RESOLUTION_TIMES);
     max = srs_max(max, SRS_SYS_NETWORK_DEVICE_RESOLUTION_TIMES);
     max = srs_max(max, SRS_SYS_NETWORK_RTMP_SERVER_RESOLUTION_TIMES);
-#endif
     
     // for asprocess.
     bool asprocess = _srs_config->get_asprocess();
     
-    // the deamon thread, update the time cache
+    // the daemon thread, update the time cache
     // TODO: FIXME: use SrsHourGlass.
     while (true) {
         if (handler && (err = handler->on_cycle()) != srs_success) {
@@ -929,7 +904,7 @@ srs_error_t SrsServer::do_cycle()
         int dynamic_max = srs_max(max, heartbeat_max_resolution);
         
         for (int i = 0; i < dynamic_max; i++) {
-            srs_usleep(SRS_SYS_CYCLE_INTERVAL * 1000);
+            srs_usleep(SRS_SYS_CYCLE_INTERVAL);
             
             // asprocess check.
             if (asprocess && ::getppid() != ppid) {
@@ -984,10 +959,9 @@ srs_error_t SrsServer::do_cycle()
             // update the cache time
             if ((i % SRS_SYS_TIME_RESOLUTION_MS_TIMES) == 0) {
                 srs_info("update current time cache.");
-                srs_update_system_time_ms();
+                srs_update_system_time();
             }
             
-#ifdef SRS_AUTO_STAT
             if ((i % SRS_SYS_RUSAGE_RESOLUTION_TIMES) == 0) {
                 srs_info("update resource info, rss.");
                 srs_update_system_rusage();
@@ -1022,7 +996,6 @@ srs_error_t SrsServer::do_cycle()
                     http_heartbeat->heartbeat();
                 }
             }
-#endif
             
             srs_info("server main thread loop");
         }
@@ -1044,9 +1017,8 @@ srs_error_t SrsServer::listen_rtmp()
     for (int i = 0; i < (int)ip_ports.size(); i++) {
         SrsListener* listener = new SrsBufferListener(this, SrsListenerRtmpStream);
         listeners.push_back(listener);
-        
-        std::string ip;
-        int port;
+
+        int port; string ip;
         srs_parse_endpoint(ip_ports[i], ip, port);
         
         if ((err = listener->listen(ip, port)) != srs_success) {
@@ -1107,7 +1079,6 @@ srs_error_t SrsServer::listen_stream_caster()
 {
     srs_error_t err = srs_success;
     
-#ifdef SRS_AUTO_STREAM_CASTER
     close_listeners(SrsListenerMpegTsOverUdp);
     
     std::vector<SrsConfDirective*>::iterator it;
@@ -1141,11 +1112,10 @@ srs_error_t SrsServer::listen_stream_caster()
         }
         
         // TODO: support listen at <[ip:]port>
-        if ((err = listener->listen(srs_any_address4listener(), port)) != srs_success) {
+        if ((err = listener->listen(srs_any_address_for_listener(), port)) != srs_success) {
             return srs_error_wrap(err, "listen at %d", port);
         }
     }
-#endif
     
     return err;
 }

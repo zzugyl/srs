@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2013-2018 Winlin
+ * Copyright (c) 2013-2019 Winlin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -193,7 +193,7 @@ SrsProtocol::AckWindowSize::AckWindowSize()
     sequence_number = nb_recv_bytes = 0;
 }
 
-SrsProtocol::SrsProtocol(ISrsProtocolReaderWriter* io)
+SrsProtocol::SrsProtocol(ISrsProtocolReadWriter* io)
 {
     in_buffer = new SrsFastStream();
     skt = io;
@@ -304,22 +304,22 @@ void SrsProtocol::set_recv_buffer(int buffer_size)
 }
 #endif
 
-void SrsProtocol::set_recv_timeout(int64_t tm)
+void SrsProtocol::set_recv_timeout(srs_utime_t tm)
 {
     return skt->set_recv_timeout(tm);
 }
 
-int64_t SrsProtocol::get_recv_timeout()
+srs_utime_t SrsProtocol::get_recv_timeout()
 {
     return skt->get_recv_timeout();
 }
 
-void SrsProtocol::set_send_timeout(int64_t tm)
+void SrsProtocol::set_send_timeout(srs_utime_t tm)
 {
     return skt->set_send_timeout(tm);
 }
 
-int64_t SrsProtocol::get_send_timeout()
+srs_utime_t SrsProtocol::get_send_timeout()
 {
     return skt->get_send_timeout();
 }
@@ -979,18 +979,18 @@ srs_error_t SrsProtocol::read_basic_header(char& fmt, int& cid)
     // 2-63, 1B chunk header
     if (cid > 1) {
         return err;
-    }
-    
     // 64-319, 2B chunk header
-    if (cid == 0) {
+    } else if (cid == 0) {
         if ((err = in_buffer->grow(skt, 1)) != srs_success) {
             return srs_error_wrap(err, "basic header requires 2 bytes");
         }
-        
+
         cid = 64;
         cid += (uint8_t)in_buffer->read_1byte();
-        // 64-65599, 3B chunk header
-    } else if (cid == 1) {
+    // 64-65599, 3B chunk header
+    } else {
+        srs_assert(cid == 1);
+
         if ((err = in_buffer->grow(skt, 2)) != srs_success) {
             return srs_error_wrap(err, "basic header requires 3 bytes");
         }
@@ -998,9 +998,6 @@ srs_error_t SrsProtocol::read_basic_header(char& fmt, int& cid)
         cid = 64;
         cid += (uint8_t)in_buffer->read_1byte();
         cid += ((uint8_t)in_buffer->read_1byte()) * 256;
-    } else {
-        srs_error("invalid path, impossible basic header.");
-        srs_assert(false);
     }
     
     return err;
@@ -1581,6 +1578,7 @@ void SrsRequest::update_auth(SrsRequest* req)
     pageUrl = req->pageUrl;
     swfUrl = req->swfUrl;
     tcUrl = req->tcUrl;
+    param = req->param;
     
     ip = req->ip;
     vhost = req->vhost;
@@ -1624,6 +1622,12 @@ void SrsRequest::strip()
     stream = srs_string_trim_start(stream, "/");
 }
 
+SrsRequest* SrsRequest::as_http()
+{
+    schema = "http";
+    return this;
+}
+
 SrsResponse::SrsResponse()
 {
     stream_id = SRS_DEFAULT_SID;
@@ -1652,16 +1656,22 @@ bool srs_client_type_is_publish(SrsRtmpConnType type)
 SrsHandshakeBytes::SrsHandshakeBytes()
 {
     c0c1 = s0s1s2 = c2 = NULL;
+    proxy_real_ip = 0;
 }
 
 SrsHandshakeBytes::~SrsHandshakeBytes()
+{
+    dispose();
+}
+
+void SrsHandshakeBytes::dispose()
 {
     srs_freepa(c0c1);
     srs_freepa(s0s1s2);
     srs_freepa(c2);
 }
 
-srs_error_t SrsHandshakeBytes::read_c0c1(ISrsProtocolReaderWriter* io)
+srs_error_t SrsHandshakeBytes::read_c0c1(ISrsProtocolReadWriter* io)
 {
     srs_error_t err = srs_success;
     
@@ -1675,11 +1685,31 @@ srs_error_t SrsHandshakeBytes::read_c0c1(ISrsProtocolReaderWriter* io)
     if ((err = io->read_fully(c0c1, 1537, &nsize)) != srs_success) {
         return srs_error_wrap(err, "read c0c1");
     }
+
+    // Whether RTMP proxy, @see https://github.com/ossrs/go-oryx/wiki/RtmpProxy
+    if (uint8_t(c0c1[0]) == 0xF3) {
+        uint16_t nn = uint16_t(c0c1[1])<<8 | uint16_t(c0c1[2]);
+        ssize_t nn_consumed = 3 + nn;
+        if (nn > 1024) {
+            return srs_error_new(ERROR_RTMP_PROXY_EXCEED, "proxy exceed max size, nn=%d", nn);
+        }
+
+        // 4B client real IP.
+        if (nn >= 4) {
+            proxy_real_ip = uint32_t(c0c1[3])<<24 | uint32_t(c0c1[4])<<16 | uint32_t(c0c1[5])<<8 | uint32_t(c0c1[6]);
+            nn -= 4;
+        }
+
+        memmove(c0c1, c0c1 + nn_consumed, 1537 - nn_consumed);
+        if ((err = io->read_fully(c0c1 + 1537 - nn_consumed, nn_consumed, &nsize)) != srs_success) {
+            return srs_error_wrap(err, "read c0c1");
+        }
+    }
     
     return err;
 }
 
-srs_error_t SrsHandshakeBytes::read_s0s1s2(ISrsProtocolReaderWriter* io)
+srs_error_t SrsHandshakeBytes::read_s0s1s2(ISrsProtocolReadWriter* io)
 {
     srs_error_t err = srs_success;
     
@@ -1697,7 +1727,7 @@ srs_error_t SrsHandshakeBytes::read_s0s1s2(ISrsProtocolReaderWriter* io)
     return err;
 }
 
-srs_error_t SrsHandshakeBytes::read_c2(ISrsProtocolReaderWriter* io)
+srs_error_t SrsHandshakeBytes::read_c2(ISrsProtocolReadWriter* io)
 {
     srs_error_t err = srs_success;
     
@@ -1795,7 +1825,7 @@ SrsServerInfo::SrsServerInfo()
     major = minor = revision = build = 0;
 }
 
-SrsRtmpClient::SrsRtmpClient(ISrsProtocolReaderWriter* skt)
+SrsRtmpClient::SrsRtmpClient(ISrsProtocolReadWriter* skt)
 {
     io = skt;
     protocol = new SrsProtocol(skt);
@@ -1808,12 +1838,12 @@ SrsRtmpClient::~SrsRtmpClient()
     srs_freep(hs_bytes);
 }
 
-void SrsRtmpClient::set_recv_timeout(int64_t tm)
+void SrsRtmpClient::set_recv_timeout(srs_utime_t tm)
 {
     protocol->set_recv_timeout(tm);
 }
 
-void SrsRtmpClient::set_send_timeout(int64_t tm)
+void SrsRtmpClient::set_send_timeout(srs_utime_t tm)
 {
     protocol->set_send_timeout(tm);
 }
@@ -1881,7 +1911,7 @@ srs_error_t SrsRtmpClient::handshake()
         }
     }
     
-    srs_freep(hs_bytes);
+    hs_bytes->dispose();
     
     return err;
 }
@@ -1897,7 +1927,7 @@ srs_error_t SrsRtmpClient::simple_handshake()
         return srs_error_wrap(err, "simple handshake");
     }
     
-    srs_freep(hs_bytes);
+    hs_bytes->dispose();
     
     return err;
 }
@@ -1913,7 +1943,7 @@ srs_error_t SrsRtmpClient::complex_handshake()
         return srs_error_wrap(err, "complex handshake");
     }
     
-    srs_freep(hs_bytes);
+    hs_bytes->dispose();
     
     return err;
 }
@@ -2053,7 +2083,7 @@ srs_error_t SrsRtmpClient::create_stream(int& stream_id)
     return err;
 }
 
-srs_error_t SrsRtmpClient::play(string stream, int stream_id)
+srs_error_t SrsRtmpClient::play(string stream, int stream_id, int chunk_size)
 {
     srs_error_t err = srs_success;
     
@@ -2081,27 +2111,27 @@ srs_error_t SrsRtmpClient::play(string stream, int stream_id)
     }
     
     // SetChunkSize
-    if (true) {
+    if (chunk_size != SRS_CONSTS_RTMP_PROTOCOL_CHUNK_SIZE) {
         SrsSetChunkSizePacket* pkt = new SrsSetChunkSizePacket();
-        pkt->chunk_size = SRS_CONSTS_RTMP_SRS_CHUNK_SIZE;
+        pkt->chunk_size = chunk_size;
         if ((err = protocol->send_and_free_packet(pkt, 0)) != srs_success) {
-            return srs_error_wrap(err, "send set chunk size failed. stream=%s, chunk_size=%d", stream.c_str(), SRS_CONSTS_RTMP_SRS_CHUNK_SIZE);
+            return srs_error_wrap(err, "send set chunk size failed. stream=%s, chunk_size=%d", stream.c_str(), chunk_size);
         }
     }
     
     return err;
 }
 
-srs_error_t SrsRtmpClient::publish(string stream, int stream_id)
+srs_error_t SrsRtmpClient::publish(string stream, int stream_id, int chunk_size)
 {
     srs_error_t err = srs_success;
     
     // SetChunkSize
-    if (true) {
+    if (chunk_size != SRS_CONSTS_RTMP_PROTOCOL_CHUNK_SIZE) {
         SrsSetChunkSizePacket* pkt = new SrsSetChunkSizePacket();
-        pkt->chunk_size = SRS_CONSTS_RTMP_SRS_CHUNK_SIZE;
+        pkt->chunk_size = chunk_size;
         if ((err = protocol->send_and_free_packet(pkt, 0)) != srs_success) {
-            return srs_error_wrap(err, "send set chunk size failed. stream=%s, chunk_size=%d", stream.c_str(), SRS_CONSTS_RTMP_SRS_CHUNK_SIZE);
+            return srs_error_wrap(err, "send set chunk size failed. stream=%s, chunk_size=%d", stream.c_str(), chunk_size);
         }
     }
     
@@ -2173,7 +2203,7 @@ srs_error_t SrsRtmpClient::fmle_publish(string stream, int& stream_id)
     return err;
 }
 
-SrsRtmpServer::SrsRtmpServer(ISrsProtocolReaderWriter* skt)
+SrsRtmpServer::SrsRtmpServer(ISrsProtocolReadWriter* skt)
 {
     io = skt;
     protocol = new SrsProtocol(skt);
@@ -2184,6 +2214,11 @@ SrsRtmpServer::~SrsRtmpServer()
 {
     srs_freep(protocol);
     srs_freep(hs_bytes);
+}
+
+uint32_t SrsRtmpServer::proxy_real_ip()
+{
+    return hs_bytes->proxy_real_ip;
 }
 
 void SrsRtmpServer::set_auto_response(bool v)
@@ -2203,22 +2238,22 @@ void SrsRtmpServer::set_recv_buffer(int buffer_size)
 }
 #endif
 
-void SrsRtmpServer::set_recv_timeout(int64_t tm)
+void SrsRtmpServer::set_recv_timeout(srs_utime_t tm)
 {
     protocol->set_recv_timeout(tm);
 }
 
-int64_t SrsRtmpServer::get_recv_timeout()
+srs_utime_t SrsRtmpServer::get_recv_timeout()
 {
     return protocol->get_recv_timeout();
 }
 
-void SrsRtmpServer::set_send_timeout(int64_t tm)
+void SrsRtmpServer::set_send_timeout(srs_utime_t tm)
 {
     protocol->set_send_timeout(tm);
 }
 
-int64_t SrsRtmpServer::get_send_timeout()
+srs_utime_t SrsRtmpServer::get_send_timeout()
 {
     return protocol->get_send_timeout();
 }
@@ -2277,9 +2312,9 @@ srs_error_t SrsRtmpServer::handshake()
             return srs_error_wrap(err, "complex handshake");
         }
     }
-    
-    srs_freep(hs_bytes);
-    
+
+    hs_bytes->dispose();
+
     return err;
 }
 
@@ -2378,15 +2413,9 @@ srs_error_t SrsRtmpServer::response_connect_app(SrsRequest *req, const char* ser
     data->set("srs_sig", SrsAmf0Any::str(RTMP_SIG_SRS_KEY));
     data->set("srs_server", SrsAmf0Any::str(RTMP_SIG_SRS_SERVER));
     data->set("srs_license", SrsAmf0Any::str(RTMP_SIG_SRS_LICENSE));
-    data->set("srs_role", SrsAmf0Any::str(RTMP_SIG_SRS_ROLE));
     data->set("srs_url", SrsAmf0Any::str(RTMP_SIG_SRS_URL));
     data->set("srs_version", SrsAmf0Any::str(RTMP_SIG_SRS_VERSION));
-    data->set("srs_site", SrsAmf0Any::str(RTMP_SIG_SRS_WEB));
-    data->set("srs_email", SrsAmf0Any::str(RTMP_SIG_SRS_EMAIL));
-    data->set("srs_copyright", SrsAmf0Any::str(RTMP_SIG_SRS_COPYRIGHT));
-    data->set("srs_primary", SrsAmf0Any::str(RTMP_SIG_SRS_PRIMARY));
-    data->set("srs_authors", SrsAmf0Any::str(RTMP_SIG_SRS_AUTHROS));
-    
+
     if (server_ip) {
         data->set("srs_server_ip", SrsAmf0Any::str(server_ip));
     }
@@ -2401,13 +2430,13 @@ srs_error_t SrsRtmpServer::response_connect_app(SrsRequest *req, const char* ser
     return err;
 }
 
-#define SRS_RTMP_REDIRECT_TMMS 3000
+#define SRS_RTMP_REDIRECT_TIMEOUT (3 * SRS_UTIME_SECONDS)
 srs_error_t SrsRtmpServer::redirect(SrsRequest* r, string host, int port, bool& accepted)
 {
     srs_error_t err = srs_success;
     
     if (true) {
-        string url = srs_generate_rtmp_url(host, port, r->vhost, r->app, "");
+        string url = srs_generate_rtmp_url(host, port, r->host, r->vhost, r->app, r->stream, r->param);
         
         SrsAmf0Object* ex = SrsAmf0Any::object();
         ex->set("code", SrsAmf0Any::number(302));
@@ -2427,7 +2456,7 @@ srs_error_t SrsRtmpServer::redirect(SrsRequest* r, string host, int port, bool& 
     
     // client must response a call message.
     // or we never know whether the client is ok to redirect.
-    protocol->set_recv_timeout(SRS_RTMP_REDIRECT_TMMS);
+    protocol->set_recv_timeout(SRS_RTMP_REDIRECT_TIMEOUT);
     if (true) {
         SrsCommonMessage* msg = NULL;
         SrsCallPacket* pkt = NULL;
@@ -2478,7 +2507,7 @@ srs_error_t SrsRtmpServer::on_bw_done()
     return err;
 }
 
-srs_error_t SrsRtmpServer::identify_client(int stream_id, SrsRtmpConnType& type, string& stream_name, double& duration)
+srs_error_t SrsRtmpServer::identify_client(int stream_id, SrsRtmpConnType& type, string& stream_name, srs_utime_t& duration)
 {
     type = SrsRtmpConnUnknown;
     srs_error_t err = srs_success;
@@ -2880,7 +2909,7 @@ srs_error_t SrsRtmpServer::start_flash_publish(int stream_id)
     return err;
 }
 
-srs_error_t SrsRtmpServer::identify_create_stream_client(SrsCreateStreamPacket* req, int stream_id, SrsRtmpConnType& type, string& stream_name, double& duration)
+srs_error_t SrsRtmpServer::identify_create_stream_client(SrsCreateStreamPacket* req, int stream_id, SrsRtmpConnType& type, string& stream_name, srs_utime_t& duration)
 {
     srs_error_t err = srs_success;
     
@@ -2979,11 +3008,11 @@ srs_error_t SrsRtmpServer::identify_flash_publish_client(SrsPublishPacket* req, 
     return srs_success;
 }
 
-srs_error_t SrsRtmpServer::identify_play_client(SrsPlayPacket* req, SrsRtmpConnType& type, string& stream_name, double& duration)
+srs_error_t SrsRtmpServer::identify_play_client(SrsPlayPacket* req, SrsRtmpConnType& type, string& stream_name, srs_utime_t& duration)
 {
     type = SrsRtmpConnPlay;
     stream_name = req->stream_name;
-    duration = req->duration;
+    duration = srs_utime_t(req->duration) * SRS_UTIME_MILLISECONDS;
     
     return srs_success;
 }

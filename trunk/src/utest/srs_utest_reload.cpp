@@ -1,7 +1,7 @@
 /*
 The MIT License (MIT)
 
-Copyright (c) 2013-2018 Winlin
+Copyright (c) 2013-2019 Winlin
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -298,8 +298,6 @@ srs_error_t MockSrsReloadConfig::do_reload(string buf)
     
     return err;
 }
-
-#ifdef ENABLE_UTEST_RELOAD
 
 VOID TEST(ConfigReloadTest, ReloadEmpty)
 {
@@ -919,6 +917,4 @@ VOID TEST(ConfigReloadTest, ReloadVhostIngestUpdated)
     EXPECT_EQ(1, handler.count_true());
     handler.reset();
 }
-
-#endif
 

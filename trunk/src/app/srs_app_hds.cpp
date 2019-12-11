@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2013-2018 Winlin
+ * Copyright (c) 2013-2019 Winlin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -348,7 +348,7 @@ srs_error_t SrsHds::on_video(SrsSharedPtrMessage* msg)
     
     currentSegment->on_video(msg);
     
-    double fragment_duration = _srs_config->get_hds_fragment(hds_req->vhost) * 1000;
+    double fragment_duration = srsu2ms(_srs_config->get_hds_fragment(hds_req->vhost));
     if (currentSegment->duration() >= fragment_duration) {
         // flush segment
         if ((err = currentSegment->flush()) != srs_success) {
@@ -398,7 +398,7 @@ srs_error_t SrsHds::on_audio(SrsSharedPtrMessage* msg)
     
     currentSegment->on_audio(msg);
     
-    double fragment_duration = _srs_config->get_hds_fragment(hds_req->vhost) * 1000;
+    double fragment_duration = srsu2ms(_srs_config->get_hds_fragment(hds_req->vhost));
     if (currentSegment->duration() >= fragment_duration) {
         // flush segment
         if ((err = currentSegment->flush()) != srs_success) {
@@ -718,7 +718,7 @@ void SrsHds::adjust_windows()
         windows_size += fragment->duration();
     }
     
-    double windows_size_limit = _srs_config->get_hds_window(hds_req->vhost) * 1000;
+    double windows_size_limit = srsu2ms(_srs_config->get_hds_window(hds_req->vhost));
     if (windows_size > windows_size_limit ) {
         SrsHdsFragment *fragment = fragments.front();
         unlink(fragment->fragment_path().c_str());
