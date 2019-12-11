@@ -1,5 +1,6 @@
 # Simple-RTMP-Server
 
+![](http://ossrs.net:8000/gif/v1/sls.gif?site=github.com&path=/srs/srs2)
 [![CircleCI](https://circleci.com/gh/ossrs/srs/tree/master.svg?style=svg&circle-token=1ef1d5b5b0cde6c8c282ed856a18199f9e8f85a9)](https://circleci.com/gh/ossrs/srs/tree/master)
 [![Wechat](https://cloud.githubusercontent.com/assets/2777660/22814959/c51cbe72-ef92-11e6-81cc-32b657b285d5.png)](https://github.com/ossrs/srs/wiki/v1_CN_Contact#wechat)
 [<img width="52" alt="Skype" src="https://cloud.githubusercontent.com/assets/2777660/24329166/3821a328-1230-11e7-844a-506a5d17dd3d.png">](https://github.com/ossrs/srs/wiki/v1_EN_Contact#skype-or-gitter)
@@ -294,6 +295,7 @@ Remark:
 
 ## Releases
 
+* 2018-11-29, [Release v2.0-r7][r2.0r7], 2.0 release7, 2.0.265, 86994 lines.
 * 2018-10-28, [Release v2.0-r6][r2.0r6], 2.0 release6, 2.0.263, 86994 lines.
 * 2018-10-28, [Release v2.0-r5][r2.0r5], 2.0 release5, 2.0.258, 86916 lines.
 * 2018-08-12, [Release v2.0-r4][r2.0r4], 2.0 release4, 2.0.255, 86915 lines.
@@ -336,6 +338,8 @@ Remark:
 
 ## History
 
+* <strong>v2.0, 2019-11-29, [2.0 release7(2.0.265)][r2.0r7] released. 86994 lines.</strong>
+* v2.0, 2019-11-29, For [srs-docker](https://github.com/ossrs/srs-docker/tree/master/2.0), install Cherrypy without sudo. 2.0.265
 * v2.0, 2019-04-06, For [#1304][bug #1304], Default HSTRS to on. 2.0.264
 * <strong>v2.0, 2019-04-05, [2.0 release6(2.0.263)][r2.0r6] released. 86994 lines.</strong>
 * v2.0, 2019-04-05, Merge [#1312][bug #1312], Fix GCC7 build error, this statement may fall through. 2.0.263
@@ -1354,6 +1358,7 @@ Winlin
 
 [exo #828]: https://github.com/google/ExoPlayer/pull/828
 
+[r2.0r7]: https://github.com/ossrs/srs/releases/tag/v2.0-r7
 [r2.0r6]: https://github.com/ossrs/srs/releases/tag/v2.0-r6
 [r2.0r5]: https://github.com/ossrs/srs/releases/tag/v2.0-r5
 [r2.0r4]: https://github.com/ossrs/srs/releases/tag/v2.0-r4
