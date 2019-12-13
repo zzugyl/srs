@@ -145,7 +145,15 @@ For previous versions, please read:
 
 ## V3 changes
 
-* v3.0, 2019-12-05, Fix [#1506][bug #1501], support directly turn FLV timestamp to TS DTS. 3.0.68
+* <strong>v3.0, 2019-12-13, [3.0 alpha4(3.0.71)][r3.0a4] released. 112928 lines.</strong>
+* v3.0, 2019-12-12, For [#547][bug #547], [#1506][bug #1506], default hls_dts_directly to on. 3.0.71
+* v3.0, 2019-12-12, SrsPacket supports converting to message, so can be sent by one API.
+* v3.0, 2019-12-11, For [#1042][bug #1042], cover RTMP client/server protocol.
+* v3.0, 2019-12-11, Fix [#1445][bug #1445], limit the createStream recursive depth. 3.0.70
+* v3.0, 2019-12-11, For [#1042][bug #1042], cover RTMP handshake protocol.
+* v3.0, 2019-12-11, Fix [#1229][bug #1229], fix the security risk in logger. 3.0.69
+* v3.0, 2019-12-11, For [#1229][bug #1229], fix the security risk in HDS. 3.0.69
+* v3.0, 2019-12-05, Fix [#1506][bug #1506], support directly turn FLV timestamp to TS DTS. 3.0.68
 * <strong>v3.0, 2019-11-30, [3.0 alpha3(3.0.67)][r3.0a3] released. 110864 lines.</strong>
 * v3.0, 2019-12-01, Fix [#1501][bug #1501], use request coworker for origin cluster. 3.0.67
 * <strong>v3.0, 2019-11-30, [3.0 alpha2(3.0.66)][r3.0a2] released. 110831 lines.</strong>
@@ -223,6 +231,7 @@ For previous versions, please read:
 
 ## V2 changes
 
+* v2.0, 2019-12-13, Support openssl versions greater than 1.1.0. 2.0.266
 * <strong>v2.0, 2019-11-29, [2.0 release7(2.0.265)][r2.0r7] released. 86994 lines.</strong>
 * v2.0, 2019-11-29, For [srs-docker](https://github.com/ossrs/srs-docker/tree/master/2.0), install Cherrypy without sudo. 2.0.265
 * v2.0, 2019-04-06, For [#1304][bug #1304], Default HSTRS to on. 2.0.264
@@ -654,6 +663,7 @@ For previous versions, please read:
 
 ## Releases
 
+* 2019-12-13, [Release v3.0-a4][r3.0a4], 3.0 alpha4, 3.0.71, 112928 lines.
 * 2019-11-30, [Release v3.0-a3][r3.0a3], 3.0 alpha3, 3.0.67, 110864 lines.
 * 2019-11-30, [Release v3.0-a2][r3.0a2], 3.0 alpha2, 3.0.66, 110831 lines.
 * 2019-10-07, [Release v3.0-a1][r3.0a1], 3.0 alpha1, 3.0.60, 107962 lines.
@@ -1510,10 +1520,15 @@ Winlin
 [bug #1051]: https://github.com/ossrs/srs/issues/1051
 [bug #1093]: https://github.com/ossrs/srs/issues/1093
 [bug #1501]: https://github.com/ossrs/srs/issues/1501
+[bug #1229]: https://github.com/ossrs/srs/issues/1229
+[bug #1042]: https://github.com/ossrs/srs/issues/1042
+[bug #1445]: https://github.com/ossrs/srs/issues/1445
+[bug #1506]: https://github.com/ossrs/srs/issues/1506
 [bug #xxxxxxxxxxxxx]: https://github.com/ossrs/srs/issues/xxxxxxxxxxxxx
 
 [exo #828]: https://github.com/google/ExoPlayer/pull/828
 
+[r3.0a4]: https://github.com/ossrs/srs/releases/tag/v3.0-a4
 [r3.0a3]: https://github.com/ossrs/srs/releases/tag/v3.0-a3
 [r3.0a2]: https://github.com/ossrs/srs/releases/tag/v3.0-a2
 [r3.0a1]: https://github.com/ossrs/srs/releases/tag/v3.0-a1
