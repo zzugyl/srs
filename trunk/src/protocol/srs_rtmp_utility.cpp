@@ -71,8 +71,9 @@ void srs_discovery_tc_url(
     vhost = host;
     srs_vhost_resolve(vhost, app, param);
     srs_vhost_resolve(vhost, stream, param);
-    
-    if (param == "?vhost="SRS_CONSTS_RTMP_DEFAULT_VHOST) {
+
+    // There must be a space to make VS2015 happy.
+    if (param == "?vhost=" SRS_CONSTS_RTMP_DEFAULT_VHOST) {
         param = "";
     }
 }
@@ -89,6 +90,7 @@ void srs_vhost_resolve(string& vhost, string& app, string& param)
     app = srs_string_replace(app, ",", "?");
     app = srs_string_replace(app, "...", "?");
     app = srs_string_replace(app, "&&", "?");
+    app = srs_string_replace(app, "&", "?");
     app = srs_string_replace(app, "=", "?");
     if (srs_string_ends_with(app, "/_definst_")){
         app = srs_erase_last_substr(app, "/_definst_");

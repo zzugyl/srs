@@ -353,7 +353,7 @@ int srs_do_create_dir_recursively(string dir)
     mode_t mode = S_IRUSR|S_IWUSR|S_IXUSR|S_IRGRP|S_IWGRP|S_IXGRP|S_IROTH|S_IXOTH;
     if (::mkdir(dir.c_str(), mode) < 0) {
 #else
-    if (::mkdir(dir.c_str()) < 0) {
+    if (::_mkdir(dir.c_str()) < 0) {
 #endif
         if (errno == EEXIST) {
             return ERROR_SYSTEM_DIR_EXISTS;
@@ -430,7 +430,7 @@ bool srs_avc_startswith_annexb(SrsStream* stream, int* pnb_start_code)
     char* p = bytes;
     
     for (;;) {
-        if (!stream->require(p - bytes + 3)) {
+        if (!stream->require((int)(p - bytes + 3))) {
             return false;
         }
         
@@ -721,7 +721,7 @@ out2:
     *dst++ = v >> 4;
 out1:
 out0:
-    return bits & 1 ? -1 : dst - out;
+    return (int)(bits & 1 ? -1 : dst - out);
 }
 
 /*****************************************************************************
@@ -833,9 +833,9 @@ int srs_chunk_header_c0(
         *p++ = pp[1];
         *p++ = pp[0];
     } else {
-        *p++ = 0xFF;
-        *p++ = 0xFF;
-        *p++ = 0xFF;
+        *p++ = (char)0xFF;
+        *p++ = (char)0xFF;
+        *p++ = (char)0xFF;
     }
     
     // message_length, 3bytes, big-endian
@@ -881,7 +881,7 @@ int srs_chunk_header_c0(
     }
     
     // always has header
-    return p - cache;
+    return (int)(p - cache);
 }
 
 int srs_chunk_header_c3(
@@ -931,6 +931,6 @@ int srs_chunk_header_c3(
     }
     
     // always has header
-    return p - cache;
+    return (int)(p - cache);
 }
 
