@@ -23,6 +23,7 @@
 
 #include <srs_app_security.hpp>
 
+#include <srs_kernel_log.hpp>
 #include <srs_kernel_error.hpp>
 #include <srs_app_config.hpp>
 
@@ -53,19 +54,27 @@ srs_error_t SrsSecurity::check(SrsRtmpConnType type, string ip, SrsRequest* req)
 srs_error_t SrsSecurity::do_check(SrsConfDirective* rules, SrsRtmpConnType type, string ip, SrsRequest* req)
 {
     srs_error_t err = srs_success;
+    srs_error_t deny_err = srs_success;
+    srs_error_t allow_err = srs_success;
 
     if (!rules) {
         return srs_error_new(ERROR_SYSTEM_SECURITY, "default deny for %s", ip.c_str());
     }
 
     // deny if matches deny strategy.
-    if ((err = deny_check(rules, type, ip)) != srs_success) {
-        return srs_error_wrap(err, "for %s", ip.c_str());
+    if ((deny_err = deny_check(rules, type, ip)) != srs_success) {
+        err = srs_error_wrap(err, "for %s", ip.c_str());
     }
     
     // allow if matches allow strategy.
-    if ((err = allow_check(rules, type, ip)) != srs_success) {
-        return srs_error_wrap(err, "for %s", ip.c_str());
+    if ((allow_err = allow_check(rules, type, ip)) != srs_success) {
+        err = srs_error_wrap(err, "for %s", ip.c_str());
+    }
+
+    // if deny is not success but allow is, allow overrides it
+    if (deny_err != srs_success && allow_err == srs_success) {
+        srs_trace("allowing ip=%s because allow rule has precedence over deny", ip.c_str(), type);
+        err = srs_success;
     }
 
     return err;
@@ -89,16 +98,23 @@ srs_error_t SrsSecurity::allow_check(SrsConfDirective* rules, SrsRtmpConnType ty
 
         string cidr_ipv4 = srs_get_cidr_ipv4(rule->arg1());
         string cidr_mask = srs_get_cidr_mask(rule->arg1());
+        bool is_ipv4 = srs_is_ipv4(cidr_ipv4);
+        bool is_cidr_mask = cidr_mask != "";
+        bool within_mask = srs_ipv4_within_mask(ip, cidr_ipv4, cidr_mask);
 
         switch (type) {
             case SrsRtmpConnPlay:
                 if (rule->arg0() != "play") {
                     break;
                 }
+
+                srs_trace("attempting to play with ip=%s (ipv4?=%d) for allow rule ip=%s (ipv4?=%d) mask=%s -> within?=%d",
+                            ip.c_str(), srs_is_ipv4(ip), cidr_ipv4.c_str(), is_ipv4, cidr_mask.c_str(), within_mask);
+
                 if (rule->arg1() == "all" || rule->arg1() == ip) {
                     return srs_success; // OK
                 }
-                if (srs_is_ipv4(cidr_ipv4) && cidr_mask != "" && srs_ipv4_within_mask(ip, cidr_ipv4, cidr_mask)) {
+                if (is_ipv4 && is_cidr_mask && within_mask) {
                     return srs_success; // OK
                 }
                 break;
@@ -108,10 +124,14 @@ srs_error_t SrsSecurity::allow_check(SrsConfDirective* rules, SrsRtmpConnType ty
                 if (rule->arg0() != "publish") {
                     break;
                 }
+
+                srs_trace("attempting to publish with ip=%s (ipv4?=%d) for allow rule ip=%s (ipv4?=%d) mask=%s -> within?=%d",
+                            ip.c_str(), srs_is_ipv4(ip), cidr_ipv4.c_str(), is_ipv4, cidr_mask.c_str(), within_mask);
+
                 if (rule->arg1() == "all" || rule->arg1() == ip) {
                     return srs_success; // OK
                 }
-                if (srs_is_ipv4(cidr_ipv4) && cidr_mask != "" && srs_ipv4_within_mask(ip, cidr_ipv4, cidr_mask)) {
+                if (is_ipv4 && is_cidr_mask && within_mask) {
                     return srs_success; // OK
                 }
                 break;
@@ -138,16 +158,23 @@ srs_error_t SrsSecurity::deny_check(SrsConfDirective* rules, SrsRtmpConnType typ
 
         string cidr_ipv4 = srs_get_cidr_ipv4(rule->arg1());
         string cidr_mask = srs_get_cidr_mask(rule->arg1());
+        bool is_ipv4 = srs_is_ipv4(cidr_ipv4);
+        bool is_cidr_mask = cidr_mask != "";
+        bool within_mask = srs_ipv4_within_mask(ip, cidr_ipv4, cidr_mask);
         
         switch (type) {
             case SrsRtmpConnPlay:
                 if (rule->arg0() != "play") {
                     break;
                 }
+
+                srs_trace("attempting to play with ip=%s (ipv4?=%d) for deny rule ip=%s (ipv4?=%d) mask=%s -> within?=%d",
+                            ip.c_str(), srs_is_ipv4(ip), cidr_ipv4.c_str(), is_ipv4, cidr_mask.c_str(), within_mask);
+
                 if (rule->arg1() == "all" || rule->arg1() == ip) {
                     return srs_error_new(ERROR_SYSTEM_SECURITY_DENY, "deny by rule<%s>", rule->arg1().c_str());
                 }
-                if (srs_is_ipv4(cidr_ipv4) && cidr_mask != "" && srs_ipv4_within_mask(ip, cidr_ipv4, cidr_mask)) {
+                if (is_ipv4 && is_cidr_mask && within_mask) {
                     return srs_error_new(ERROR_SYSTEM_SECURITY_DENY, "deny by rule<%s>", rule->arg1().c_str());
                 }
                 break;
@@ -157,10 +184,14 @@ srs_error_t SrsSecurity::deny_check(SrsConfDirective* rules, SrsRtmpConnType typ
                 if (rule->arg0() != "publish") {
                     break;
                 }
+
+                srs_trace("attempting to publish with ip=%s (ipv4?=%d) for deny rule ip=%s (ipv4?=%d) mask=%s -> within?=%d",
+                            ip.c_str(), srs_is_ipv4(ip), cidr_ipv4.c_str(), is_ipv4, cidr_mask.c_str(), within_mask);
+
                 if (rule->arg1() == "all" || rule->arg1() == ip) {
                     return srs_error_new(ERROR_SYSTEM_SECURITY_DENY, "deny by rule<%s>", rule->arg1().c_str());
                 }
-                if (srs_is_ipv4(cidr_ipv4) && cidr_mask != "" && srs_ipv4_within_mask(ip, cidr_ipv4, cidr_mask)) {
+                if (is_ipv4 && is_cidr_mask && within_mask) {
                     return srs_error_new(ERROR_SYSTEM_SECURITY_DENY, "deny by rule<%s>", rule->arg1().c_str());
                 }
                 break;
