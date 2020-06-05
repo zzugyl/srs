@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2013-2019 Winlin
+ * Copyright (c) 2013-2020 Winlin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -56,7 +56,7 @@ extern std::string srs_dns_resolve(std::string host, int& family);
 
 // Split the host:port to host and port.
 // @remark the hostport format in <host[:port]>, where port is optional.
-extern void srs_parse_hostport(const std::string& hostport, std::string& host, int& port);
+extern void srs_parse_hostport(std::string hostport, std::string& host, int& port);
 
 // Parse the endpoint to ip and port.
 // @remark The hostport format in <[ip:]port>, where ip is default to "0.0.0.0".
@@ -98,6 +98,8 @@ extern bool srs_string_starts_with(std::string str, std::string flag0, std::stri
 extern bool srs_string_contains(std::string str, std::string flag);
 extern bool srs_string_contains(std::string str, std::string flag0, std::string flag1);
 extern bool srs_string_contains(std::string str, std::string flag0, std::string flag1, std::string flag2);
+// Count each char of flag in string
+extern int srs_string_count(std::string str, std::string flag);
 // Find the min match in str for flags.
 extern std::string srs_string_min_match(std::string str, std::vector<std::string> flags);
 // Split the string by flag to array.
@@ -164,7 +166,11 @@ extern int srs_chunk_header_c3(int perfer_cid, uint32_t timestamp, char* cache, 
 
 // For utest to mock it.
 #include <sys/time.h>
-typedef int (*_srs_gettimeofday_t)(struct timeval* tv, struct timezone* tz);
+#ifdef SRS_AUTO_OSX
+    #define _srs_gettimeofday gettimeofday
+#else
+    typedef int (*_srs_gettimeofday_t) (struct timeval* tv, struct timezone* tz);
+#endif
 
 #endif
 

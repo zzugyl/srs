@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2013-2019 Winlin
+ * Copyright (c) 2013-2020 Winlin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -104,12 +104,13 @@ class impl__SrsLocker
 private:
     srs_mutex_t* lock;
 public:
-    impl__SrsLocker(srs_mutex_t* l) : lock(l) {
-        int r0 = srs_mutex_lock(lock);
+    impl__SrsLocker(srs_mutex_t* l) {
+        lock = l;
+        int r0 = srs_mutex_lock(*lock);
         srs_assert(!r0);
     }
     virtual ~impl__SrsLocker() {
-        int r0 = srs_mutex_unlock(lock);
+        int r0 = srs_mutex_unlock(*lock);
         srs_assert(!r0);
     }
 };

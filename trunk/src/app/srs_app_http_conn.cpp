@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2013-2019 Winlin
+ * Copyright (c) 2013-2020 Winlin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -81,11 +81,9 @@ srs_error_t SrsHttpConn::do_cycle()
 {
     srs_error_t err = srs_success;
     
-    srs_trace("HTTP client ip=%s", ip.c_str());
-    
     // initialize parser
     if ((err = parser->initialize(HTTP_REQUEST, false)) != srs_success) {
-        return srs_error_wrap(err, "init parser");
+        return srs_error_wrap(err, "init parser for %s", ip.c_str());
     }
     
     // set the recv timeout, for some clients never disconnect the connection.
@@ -102,10 +100,12 @@ srs_error_t SrsHttpConn::do_cycle()
     }
     
     // process http messages.
-    while ((err = trd->pull()) == srs_success) {
-        ISrsHttpMessage* req = NULL;
-        
+    for (int req_id = 0; (err = trd->pull()) == srs_success; req_id++) {
+        // Try to receive a message from http.
+        srs_trace("HTTP client ip=%s, request=%d, to=%dms", ip.c_str(), req_id, srsu2ms(SRS_HTTP_RECV_TIMEOUT));
+
         // get a http message
+        ISrsHttpMessage* req = NULL;
         if ((err = parser->parse_message(skt, &req)) != srs_success) {
             break;
         }
@@ -198,18 +198,31 @@ srs_error_t SrsResponseOnlyHttpConn::pop_message(ISrsHttpMessage** preq)
     srs_error_t err = srs_success;
     
     SrsStSocket skt;
-    
+
     if ((err = skt.initialize(stfd)) != srs_success) {
         return srs_error_wrap(err, "init socket");
     }
-    
-    if ((err = parser->parse_message(&skt, preq)) != srs_success) {
-        return srs_error_wrap(err, "parse message");
+
+    // Check user interrupt by interval.
+    skt.set_recv_timeout(3 * SRS_UTIME_SECONDS);
+
+    // drop all request body.
+    char body[4096];
+    while (true) {
+        if ((err = trd->pull()) != srs_success) {
+            return srs_error_wrap(err, "timeout");
+        }
+
+        if ((err = skt.read(body, 4096, NULL)) != srs_success) {
+            // Because we use timeout to check trd state, so we should ignore any timeout.
+            if (srs_error_code(err) == ERROR_SOCKET_TIMEOUT) {
+                srs_freep(err);
+                continue;
+            }
+
+            return srs_error_wrap(err, "read response");
+        }
     }
-    
-    // Attach owner connection to message.
-    SrsHttpMessage* hreq = (SrsHttpMessage*)(*preq);
-    hreq->set_connection(this);
     
     return err;
 }
@@ -219,12 +232,12 @@ srs_error_t SrsResponseOnlyHttpConn::on_got_http_message(ISrsHttpMessage* msg)
     srs_error_t err = srs_success;
     
     ISrsHttpResponseReader* br = msg->body_reader();
-    
+
     // when not specified the content length, ignore.
     if (msg->content_length() == -1) {
         return err;
     }
-    
+
     // drop all request body.
     char body[4096];
     while (!br->eof()) {
@@ -234,6 +247,11 @@ srs_error_t SrsResponseOnlyHttpConn::on_got_http_message(ISrsHttpMessage* msg)
     }
     
     return err;
+}
+
+void SrsResponseOnlyHttpConn::expire()
+{
+    SrsHttpConn::expire();
 }
 
 SrsHttpServer::SrsHttpServer(SrsServer* svr)

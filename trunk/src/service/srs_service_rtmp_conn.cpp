@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2013-2019 Winlin
+ * Copyright (c) 2013-2020 Winlin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -33,12 +33,12 @@ using namespace std;
 #include <srs_protocol_utility.hpp>
 #include <srs_service_utility.hpp>
 
-SrsBasicRtmpClient::SrsBasicRtmpClient(string u, srs_utime_t ctm, srs_utime_t stm)
+SrsBasicRtmpClient::SrsBasicRtmpClient(string r, srs_utime_t ctm, srs_utime_t stm)
 {
     clk = new SrsWallClock();
     kbps = new SrsKbps(clk);
     
-    url = u;
+    url = r;
     connect_timeout = ctm;
     stream_timeout = stm;
     

@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2013-2019 Winlin
+ * Copyright (c) 2013-2020 Winlin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -129,7 +129,11 @@ srs_error_t SrsFileWriter::write(void* buf, size_t count, ssize_t* pnwrite)
     
     ssize_t nwrite;
     // TODO: FIXME: use st_write.
+#ifdef _WIN32
+    if ((nwrite = ::_write(fd, buf, (unsigned int)count)) < 0) {
+#else
     if ((nwrite = _srs_write_fn(fd, buf, count)) < 0) {
+#endif
         return srs_error_new(ERROR_SYSTEM_FILE_WRITE, "write to file %s failed", path.c_str());
     }
     
@@ -173,6 +177,19 @@ srs_error_t SrsFileWriter::lseek(off_t offset, int whence, off_t* seeked)
     }
     
     return srs_success;
+}
+
+ISrsFileReaderFactory::ISrsFileReaderFactory()
+{
+}
+
+ISrsFileReaderFactory::~ISrsFileReaderFactory()
+{
+}
+
+SrsFileReader* ISrsFileReaderFactory::create_file_reader()
+{
+    return new SrsFileReader();
 }
 
 SrsFileReader::SrsFileReader()
@@ -256,7 +273,11 @@ srs_error_t SrsFileReader::read(void* buf, size_t count, ssize_t* pnread)
     
     ssize_t nread;
     // TODO: FIXME: use st_read.
+#ifdef _WIN32
+    if ((nread = _read(fd, buf, (unsigned int)count)) < 0) {
+#else
     if ((nread = _srs_read_fn(fd, buf, count)) < 0) {
+#endif
         return srs_error_new(ERROR_SYSTEM_FILE_READ, "read from file %s failed", path.c_str());
     }
     

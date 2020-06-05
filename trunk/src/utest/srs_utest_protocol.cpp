@@ -1,7 +1,7 @@
 /*
 The MIT License (MIT)
 
-Copyright (c) 2013-2019 Winlin
+Copyright (c) 2013-2020 Winlin
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -229,8 +229,6 @@ srs_error_t MockBufferIO::writev(const iovec *iov, int iov_size, ssize_t* nwrite
         }
         total += writen;
     }
-    
-    sbytes += total;
     
     if (nwrite) {
         *nwrite = total;
@@ -588,142 +586,6 @@ VOID TEST(ProtocolHandshakeTest, BytesEqual)
     EXPECT_TRUE(srs_bytes_equals(a1, a1, 1));
     EXPECT_TRUE(srs_bytes_equals(a1, a2, 1));
     EXPECT_FALSE(srs_bytes_equals(a1, b2, 1));
-}
-
-/**
-* discovery tcUrl to schema/vhost/host/port/app
-*/
-VOID TEST(ProtocolUtilityTest, DiscoveryTcUrl)
-{
-    std::string tcUrl, schema, ip, vhost, app, stream, param;
-    int port;
-    
-    // general url
-    tcUrl = "rtmp://winlin.cn/live"; stream= "show";
-    srs_discovery_tc_url(tcUrl, schema, ip, vhost, app, stream, port, param);
-    EXPECT_STREQ("rtmp", schema.c_str());
-    EXPECT_STREQ("winlin.cn", ip.c_str());
-    EXPECT_STREQ("winlin.cn", vhost.c_str());
-    EXPECT_STREQ("live", app.c_str());
-    EXPECT_STREQ("show", stream.c_str());
-    EXPECT_EQ(1935, port);
-    
-    tcUrl = "rtmp://winlin.cn:19351/live"; stream= "show";
-    srs_discovery_tc_url(tcUrl, schema, ip, vhost, app, stream, port, param);
-    EXPECT_STREQ("rtmp", schema.c_str());
-    EXPECT_STREQ("winlin.cn", ip.c_str());
-    EXPECT_STREQ("winlin.cn", vhost.c_str());
-    EXPECT_STREQ("live", app.c_str());
-    EXPECT_STREQ("show", stream.c_str());
-    EXPECT_EQ(19351, port);
-    
-    tcUrl = "rtmp://winlin.cn/live"; stream= "show?key=abc";
-    srs_discovery_tc_url(tcUrl, schema, ip, vhost, app, stream, port, param);
-    EXPECT_STREQ("rtmp", schema.c_str());
-    EXPECT_STREQ("winlin.cn", ip.c_str());
-    EXPECT_STREQ("winlin.cn", vhost.c_str());
-    EXPECT_STREQ("live", app.c_str());
-    EXPECT_STREQ("show", stream.c_str());
-    EXPECT_EQ(1935, port);
-    EXPECT_STREQ("?key=abc", param.c_str());
-    
-    tcUrl = "rtmp://winlin.cn/live"; stream= "show?key=abc&&vhost=demo.com";
-    srs_discovery_tc_url(tcUrl, schema, ip, vhost, app, stream, port, param);
-    EXPECT_STREQ("rtmp", schema.c_str());
-    EXPECT_STREQ("winlin.cn", ip.c_str());
-    EXPECT_STREQ("demo.com", vhost.c_str());
-    EXPECT_STREQ("live", app.c_str());
-    EXPECT_STREQ("show", stream.c_str());
-    EXPECT_EQ(1935, port);
-    EXPECT_STREQ("?key=abc&&vhost=demo.com", param.c_str());
-    
-    // vhost in app
-    tcUrl = "rtmp://winlin.cn/live?key=abc"; stream= "show";
-    srs_discovery_tc_url(tcUrl, schema, ip, vhost, app, stream, port, param);
-    EXPECT_STREQ("rtmp", schema.c_str());
-    EXPECT_STREQ("winlin.cn", ip.c_str());
-    EXPECT_STREQ("winlin.cn", vhost.c_str());
-    EXPECT_STREQ("live", app.c_str());
-    EXPECT_STREQ("show", stream.c_str());
-    EXPECT_EQ(1935, port);
-    EXPECT_STREQ("?key=abc", param.c_str());
-    
-    tcUrl = "rtmp://winlin.cn/live?key=abc&&vhost=demo.com"; stream= "show";
-    srs_discovery_tc_url(tcUrl, schema, ip, vhost, app, stream, port, param);
-    EXPECT_STREQ("rtmp", schema.c_str());
-    EXPECT_STREQ("winlin.cn", ip.c_str());
-    EXPECT_STREQ("demo.com", vhost.c_str());
-    EXPECT_STREQ("live", app.c_str());
-    EXPECT_STREQ("show", stream.c_str());
-    EXPECT_EQ(1935, port);
-    EXPECT_STREQ("?key=abc&&vhost=demo.com", param.c_str());
-    
-    // without stream
-    tcUrl = "rtmp://winlin.cn/live"; stream="";
-    srs_discovery_tc_url(tcUrl, schema, ip, vhost, app, stream, port, param);
-    EXPECT_STREQ("rtmp", schema.c_str());
-    EXPECT_STREQ("winlin.cn", ip.c_str());
-    EXPECT_STREQ("winlin.cn", vhost.c_str());
-    EXPECT_STREQ("live", app.c_str());
-    EXPECT_STREQ("", stream.c_str());
-    EXPECT_EQ(1935, port);
-    
-    tcUrl = "rtmp://127.0.0.1:1935/live"; stream="";
-    srs_discovery_tc_url(tcUrl, schema, ip, vhost, app, stream, port, param);
-    EXPECT_STREQ("rtmp", schema.c_str());
-    EXPECT_STREQ("127.0.0.1", ip.c_str());
-    EXPECT_STREQ("127.0.0.1", vhost.c_str());
-    EXPECT_STREQ("live", app.c_str());
-    EXPECT_STREQ("", stream.c_str());
-    EXPECT_EQ(1935, port);
-    
-    tcUrl = "rtmp://127.0.0.1:19351/live"; stream="";
-    srs_discovery_tc_url(tcUrl, schema, ip, vhost, app, stream, port, param);
-    EXPECT_STREQ("rtmp", schema.c_str());
-    EXPECT_STREQ("127.0.0.1", ip.c_str());
-    EXPECT_STREQ("127.0.0.1", vhost.c_str());
-    EXPECT_STREQ("live", app.c_str());
-    EXPECT_STREQ("", stream.c_str());
-    EXPECT_EQ(19351, port);
-    
-    tcUrl = "rtmp://127.0.0.1:19351/live?vhost=demo"; stream="";
-    srs_discovery_tc_url(tcUrl, schema, ip, vhost, app, stream, port, param);
-    EXPECT_STREQ("rtmp", schema.c_str());
-    EXPECT_STREQ("127.0.0.1", ip.c_str());
-    EXPECT_STREQ("demo", vhost.c_str());
-    EXPECT_STREQ("live", app.c_str());
-    EXPECT_STREQ("", stream.c_str());
-    EXPECT_EQ(19351, port);
-    
-    // no vhost
-    tcUrl = "rtmp://127.0.0.1:19351/live"; stream= "show";
-    srs_discovery_tc_url(tcUrl, schema, ip, vhost, app, stream, port, param);
-    EXPECT_STREQ("rtmp", schema.c_str());
-    EXPECT_STREQ("127.0.0.1", ip.c_str());
-    EXPECT_STREQ("127.0.0.1", vhost.c_str());
-    EXPECT_STREQ("live", app.c_str());
-    EXPECT_STREQ("show", stream.c_str());
-    EXPECT_EQ(19351, port);
-    
-    // ip and vhost
-    tcUrl = "rtmp://127.0.0.1:19351/live"; stream= "show?vhost=demo";
-    srs_discovery_tc_url(tcUrl, schema, ip, vhost, app, stream, port, param);
-    EXPECT_STREQ("rtmp", schema.c_str());
-    EXPECT_STREQ("127.0.0.1", ip.c_str());
-    EXPECT_STREQ("demo", vhost.c_str());
-    EXPECT_STREQ("live", app.c_str());
-    EXPECT_STREQ("show", stream.c_str());
-    EXPECT_EQ(19351, port);
-
-    // _definst_ at the end of app
-    tcUrl = "rtmp://winlin.cn/live/_definst_"; stream= "show";
-    srs_discovery_tc_url(tcUrl, schema, ip, vhost, app, stream, port, param);
-    EXPECT_STREQ("rtmp", schema.c_str());
-    EXPECT_STREQ("winlin.cn", ip.c_str());
-    EXPECT_STREQ("winlin.cn", vhost.c_str());
-    EXPECT_STREQ("live", app.c_str());
-    EXPECT_STREQ("show", stream.c_str());
-    EXPECT_EQ(1935, port);
 }
 
 /**
@@ -5940,8 +5802,8 @@ VOID TEST(ProtocolHTTPTest, HTTPParser)
 		MockParser parser;
 		// size = 70, nparsed = 70, nread = 0
 		HELPER_EXPECT_SUCCESS(parser.parse("GET /gslb/v1/versions HTTP/1.1\r\nHost: ossrs.net\r\nContent-Length: 5\r\n\r\n"));
-		EXPECT_EQ(70, parser.parsed);
-		EXPECT_EQ(0, parser.parser->nread);
+		EXPECT_EQ(70, (int)parser.parsed);
+		EXPECT_EQ(0, (int)parser.parser->nread);
 		EXPECT_TRUE(!parser.body);
 		EXPECT_TRUE(parser.headers_complete);
 		EXPECT_TRUE(!parser.message_complete);
@@ -5951,8 +5813,8 @@ VOID TEST(ProtocolHTTPTest, HTTPParser)
 		MockParser parser;
 		// size = 75, nparsed = 75, nread = 0
 		HELPER_EXPECT_SUCCESS(parser.parse("GET /gslb/v1/versions HTTP/1.1\r\nHost: ossrs.net\r\nContent-Length: 5\r\n\r\nHello"));
-		EXPECT_EQ(75, parser.parsed);
-		EXPECT_EQ(0, parser.parser->nread);
+		EXPECT_EQ(75, (int)parser.parsed);
+		EXPECT_EQ(0, (int)parser.parser->nread);
 		EXPECT_TRUE(parser.body && 5 == parser.body->length);
 		EXPECT_TRUE(parser.headers_complete);
 		EXPECT_TRUE(parser.message_complete);
@@ -5962,22 +5824,22 @@ VOID TEST(ProtocolHTTPTest, HTTPParser)
 		MockParser parser;
 		// size = 150, nparsed = 150, nread = 0
 		HELPER_EXPECT_SUCCESS(parser.parse("GET /gslb/v1/versions HTTP/1.1\r\nHost: ossrs.net\r\nContent-Length: 5\r\n\r\nHelloGET /gslb/v1/versions HTTP/1.1\r\nHost: ossrs.net\r\nContent-Length: 5\r\n\r\nWorld"));
-		EXPECT_EQ(150, parser.parsed);
-		EXPECT_EQ(0, parser.parser->nread);
+		EXPECT_EQ(150, (int)parser.parsed);
+		EXPECT_EQ(0, (int)parser.parser->nread);
 	}
 
 	if (true) {
 		MockParser parser;
 		// size = 70, nparsed = 70, nread = 0, content_length = 5, Header("Content-Length", 5)
 		HELPER_EXPECT_SUCCESS(parser.parse("GET /gslb/v1/versions HTTP/1.1\r\nHost: ossrs.net\r\nContent-Length: 5\r\n\r\n"));
-		EXPECT_EQ(70, parser.parsed);
-		EXPECT_EQ(0, parser.parser->nread);
-		EXPECT_EQ(5, parser.parser->content_length);
+		EXPECT_EQ(70, (int)parser.parsed);
+		EXPECT_EQ(0, (int)parser.parser->nread);
+		EXPECT_EQ(5, (int)parser.parser->content_length);
 
 		// size = 79, nparsed = 5, nread = 1, content_length = -1, Header("Content-Length", 5)
 		HELPER_EXPECT_FAILED(parser.parse("elloGET /gslb/v1/versions HTTP/1.1\r\nHost: ossrs.net\r\nContent-Length: 5\r\n\r\nHello"));
-		EXPECT_EQ(5, parser.parsed);
-		EXPECT_EQ(1, parser.parser->nread);
+		EXPECT_EQ(5, (int)parser.parsed);
+		EXPECT_EQ(1, (int)parser.parser->nread);
 		EXPECT_EQ(-1, (int64_t)parser.parser->content_length);
 	}
 
@@ -5985,14 +5847,14 @@ VOID TEST(ProtocolHTTPTest, HTTPParser)
 		MockParser parser;
 		// size = 70, nparsed = 70, nread = 0, content_length = 5, Header("Content-Length", 5)
 		HELPER_EXPECT_SUCCESS(parser.parse("GET /gslb/v1/versions HTTP/1.1\r\nHost: ossrs.net\r\nContent-Length: 5\r\n\r\n"));
-		EXPECT_EQ(70, parser.parsed);
-		EXPECT_EQ(0, parser.parser->nread);
-		EXPECT_EQ(5, parser.parser->content_length);
+		EXPECT_EQ(70, (int)parser.parsed);
+		EXPECT_EQ(0, (int)parser.parser->nread);
+		EXPECT_EQ(5, (int)parser.parser->content_length);
 
 		// size = 80, nparsed = 70, nread = 0, content_length = 0, Header("Content-Length", 5)
 		HELPER_EXPECT_SUCCESS(parser.parse("HelloGET /gslb/v1/versions HTTP/1.1\r\nHost: ossrs.net\r\nContent-Length: 5\r\n\r\nWorld"));
-		EXPECT_EQ(80, parser.parsed);
-		EXPECT_EQ(0, parser.parser->nread);
+		EXPECT_EQ(80, (int)parser.parsed);
+		EXPECT_EQ(0, (int)parser.parser->nread);
 		EXPECT_EQ(0, parser.parser->content_length);
 	}
 
@@ -6000,8 +5862,8 @@ VOID TEST(ProtocolHTTPTest, HTTPParser)
 		MockParser parser;
 		// size = 73, nparsed = 73, nread = 0, content_length = 2, Header("Content-Length", 5)
 		HELPER_EXPECT_SUCCESS(parser.parse("GET /gslb/v1/versions HTTP/1.1\r\nHost: ossrs.net\r\nContent-Length: 5\r\n\r\nHel"));
-		EXPECT_EQ(73, parser.parsed);
-		EXPECT_EQ(0, parser.parser->nread);
+		EXPECT_EQ(73, (int)parser.parsed);
+		EXPECT_EQ(0, (int)parser.parser->nread);
 		EXPECT_EQ(2, parser.parser->content_length);
 	}
 
@@ -6009,8 +5871,8 @@ VOID TEST(ProtocolHTTPTest, HTTPParser)
 		MockParser parser;
 		// size = 82, nparsed = 75, nread = 1, content_length = -1, Header("Content-Length", 5)
 		HELPER_EXPECT_FAILED(parser.parse("GET /gslb/v1/versions HTTP/1.1\r\nHost: ossrs.net\r\nContent-Length: 5\r\n\r\nHello World!"));
-		EXPECT_EQ(75, parser.parsed);
-		EXPECT_EQ(1, parser.parser->nread);
+		EXPECT_EQ(75, (int)parser.parsed);
+		EXPECT_EQ(1, (int)parser.parser->nread);
 		EXPECT_EQ(-1, (int64_t)parser.parser->content_length);
 	}
 
@@ -6018,85 +5880,85 @@ VOID TEST(ProtocolHTTPTest, HTTPParser)
 		MockParser parser;
 		// size = 34, nparsed = 34, nread = 34
 		HELPER_EXPECT_SUCCESS(parser.parse("GET /gslb/v1/versions HTTP/1.1\r\nHo"));
-		EXPECT_EQ(34, parser.parsed);
+		EXPECT_EQ(34, (int)parser.parsed);
 		EXPECT_EQ(34, parser.parser->nread);
 
 		// size = 41, nparsed = 41, nread = 0
 		HELPER_EXPECT_SUCCESS(parser.parse("st: ossrs.net\r\nContent-Length: 5\r\n\r\nHello"));
-		EXPECT_EQ(41, parser.parsed);
-		EXPECT_EQ(0, parser.parser->nread);
+		EXPECT_EQ(41, (int)parser.parsed);
+		EXPECT_EQ(0, (int)parser.parser->nread);
 	}
 
 	if (true) {
 		MockParser parser;
 		// size = 41, nparsed = 41, nread = 41
 		HELPER_EXPECT_SUCCESS(parser.parse("GET /gslb/v1/versions HTTP/1.1\r\nHost: oss"));
-		EXPECT_EQ(41, parser.parsed);
+		EXPECT_EQ(41, (int)parser.parsed);
 		EXPECT_EQ(41, parser.parser->nread);
 
 		// size = 34, nparsed = 34, nread = 0
 		HELPER_EXPECT_SUCCESS(parser.parse("rs.net\r\nContent-Length: 5\r\n\r\nHello"));
-		EXPECT_EQ(34, parser.parsed);
-		EXPECT_EQ(0, parser.parser->nread);
+		EXPECT_EQ(34, (int)parser.parsed);
+		EXPECT_EQ(0, (int)parser.parser->nread);
 	}
 
 	if (true) {
 		MockParser parser;
 		// size = 48, nparsed = 48, nread = 48
 		HELPER_EXPECT_SUCCESS(parser.parse("GET /gslb/v1/versions HTTP/1.1\r\nHost: ossrs.net\r"));
-		EXPECT_EQ(48, parser.parsed);
+		EXPECT_EQ(48, (int)parser.parsed);
 		EXPECT_EQ(48, parser.parser->nread);
 
 		// size = 27, nparsed = 27, nread = 0
 		HELPER_EXPECT_SUCCESS(parser.parse("\nContent-Length: 5\r\n\r\nHello"));
-		EXPECT_EQ(27, parser.parsed);
-		EXPECT_EQ(0, parser.parser->nread);
+		EXPECT_EQ(27, (int)parser.parsed);
+		EXPECT_EQ(0, (int)parser.parser->nread);
 	}
 
 	if (true) {
 		MockParser parser;
 		// size = 68, nparsed = 68, nread = 68
 		HELPER_EXPECT_SUCCESS(parser.parse("GET /gslb/v1/versions HTTP/1.1\r\nHost: ossrs.net\r\nContent-Length: 5\r\n"));
-		EXPECT_EQ(68, parser.parsed);
+		EXPECT_EQ(68, (int)parser.parsed);
 		EXPECT_EQ(68, parser.parser->nread);
 
 		// size = 7, nparsed = 7, nread = 0
 		HELPER_EXPECT_SUCCESS(parser.parse("\r\nHello"));
-		EXPECT_EQ(7, parser.parsed);
-		EXPECT_EQ(0, parser.parser->nread);
+		EXPECT_EQ(7, (int)parser.parsed);
+		EXPECT_EQ(0, (int)parser.parser->nread);
 	}
 
 	if (true) {
 		MockParser parser;
 		// size = 69, nparsed = 69, nread = 69
 		HELPER_EXPECT_SUCCESS(parser.parse("GET /gslb/v1/versions HTTP/1.1\r\nHost: ossrs.net\r\nContent-Length: 5\r\n\r"));
-		EXPECT_EQ(69, parser.parsed);
+		EXPECT_EQ(69, (int)parser.parsed);
 		EXPECT_EQ(69, parser.parser->nread);
 
 		// size = 6, nparsed = 6, nread = 0
 		HELPER_EXPECT_SUCCESS(parser.parse("\nHello"));
-		EXPECT_EQ(6, parser.parsed);
-		EXPECT_EQ(0, parser.parser->nread);
+		EXPECT_EQ(6, (int)parser.parsed);
+		EXPECT_EQ(0, (int)parser.parser->nread);
 	}
 
 	if (true) {
 		MockParser parser;
 		// size = 75, nparsed = 75, nread = 0
 		HELPER_EXPECT_SUCCESS(parser.parse("GET /gslb/v1/versions HTTP/1.1\r\nHost: ossrs.net\r\nContent-Length: 5\r\n\r\nHello"));
-		EXPECT_EQ(75, parser.parsed);
-		EXPECT_EQ(0, parser.parser->nread);
+		EXPECT_EQ(75, (int)parser.parsed);
+		EXPECT_EQ(0, (int)parser.parser->nread);
 	}
 
 	if (true) {
 		MockParser parser;
 		// nparsed = 2, size = 2, nread = 2
 		HELPER_EXPECT_SUCCESS(parser.parse("GE"));
-		EXPECT_EQ(2, parser.parsed);
+		EXPECT_EQ(2, (int)parser.parsed);
 		EXPECT_EQ(2, parser.parser->nread);
 
 		// size = 0, nparsed = 1, nread=2
 		HELPER_EXPECT_FAILED(parser.parse(""));
-		EXPECT_EQ(1, parser.parsed);
+		EXPECT_EQ(1, (int)parser.parsed);
 		EXPECT_EQ(2, parser.parser->nread);
 	}
 
@@ -6104,12 +5966,12 @@ VOID TEST(ProtocolHTTPTest, HTTPParser)
 		MockParser parser;
 		// size = 2, nparsed = 2, nread = 2
 		HELPER_EXPECT_SUCCESS(parser.parse("GE"));
-		EXPECT_EQ(2, parser.parsed);
+		EXPECT_EQ(2, (int)parser.parsed);
 		EXPECT_EQ(2, parser.parser->nread);
 
 		// size = 1, nparsed = 0, nread = 3
 		HELPER_EXPECT_FAILED(parser.parse("X"));
-		EXPECT_EQ(0, parser.parsed);
+		EXPECT_EQ(0, (int)parser.parsed);
 		EXPECT_EQ(3, parser.parser->nread);
 	}
 
@@ -6117,12 +5979,12 @@ VOID TEST(ProtocolHTTPTest, HTTPParser)
 		MockParser parser;
 		// size = 2, nparsed = 2, nread = 2
 		HELPER_EXPECT_SUCCESS(parser.parse("GE"));
-		EXPECT_EQ(2, parser.parsed);
+		EXPECT_EQ(2, (int)parser.parsed);
 		EXPECT_EQ(2, parser.parser->nread);
 
 		// size = 1, nparsed = 1, nread = 3
 		HELPER_EXPECT_SUCCESS(parser.parse("T"));
-		EXPECT_EQ(1, parser.parsed);
+		EXPECT_EQ(1, (int)parser.parsed);
 		EXPECT_EQ(3, parser.parser->nread);
 	}
 
@@ -6130,7 +5992,7 @@ VOID TEST(ProtocolHTTPTest, HTTPParser)
 		MockParser parser;
 		// size = 3, nparsed = 3, nread = 3
 		HELPER_EXPECT_SUCCESS(parser.parse("GET"));
-		EXPECT_EQ(3, parser.parsed);
+		EXPECT_EQ(3, (int)parser.parsed);
 		EXPECT_EQ(3, parser.parser->nread);
 	}
 }
@@ -6545,6 +6407,68 @@ VOID TEST(ProtocolKbpsTest, RAWStatistic)
         kbps->set_io(NULL, NULL);
         EXPECT_EQ(150 * 1000, kbps->get_recv_bytes());
         EXPECT_EQ(150 * 1000, kbps->get_send_bytes());
+    }
+}
+
+VOID TEST(ProtocolKbpsTest, WriteLargeIOVs)
+{
+    srs_error_t err;
+
+    if (true) {
+        iovec iovs[1];
+        iovs[0].iov_base = (char*)"Hello";
+        iovs[0].iov_len = 5;
+
+        MockBufferIO io;
+        ssize_t nn = 0;
+        HELPER_EXPECT_SUCCESS(srs_write_large_iovs(&io, iovs, 1, &nn));
+        EXPECT_EQ(5, nn);
+        EXPECT_EQ(5, io.sbytes);
+    }
+
+    if (true) {
+        iovec iovs[1024];
+        int nn_iovs = (int)(sizeof(iovs)/sizeof(iovec));
+        for (int i = 0; i < nn_iovs; i++) {
+            iovs[i].iov_base = (char*)"Hello";
+            iovs[i].iov_len = 5;
+        }
+
+        MockBufferIO io;
+        ssize_t nn = 0;
+        HELPER_EXPECT_SUCCESS(srs_write_large_iovs(&io, iovs, nn_iovs, &nn));
+        EXPECT_EQ(5 * nn_iovs, nn);
+        EXPECT_EQ(5 * nn_iovs, io.sbytes);
+    }
+
+    if (true) {
+        iovec iovs[1025];
+        int nn_iovs = (int)(sizeof(iovs)/sizeof(iovec));
+        for (int i = 0; i < nn_iovs; i++) {
+            iovs[i].iov_base = (char*)"Hello";
+            iovs[i].iov_len = 5;
+        }
+
+        MockBufferIO io;
+        ssize_t nn = 0;
+        HELPER_EXPECT_SUCCESS(srs_write_large_iovs(&io, iovs, nn_iovs, &nn));
+        EXPECT_EQ(5 * nn_iovs, nn);
+        EXPECT_EQ(5 * nn_iovs, io.sbytes);
+    }
+
+    if (true) {
+        iovec iovs[4096];
+        int nn_iovs = (int)(sizeof(iovs)/sizeof(iovec));
+        for (int i = 0; i < nn_iovs; i++) {
+            iovs[i].iov_base = (char*)"Hello";
+            iovs[i].iov_len = 5;
+        }
+
+        MockBufferIO io;
+        ssize_t nn = 0;
+        HELPER_EXPECT_SUCCESS(srs_write_large_iovs(&io, iovs, nn_iovs, &nn));
+        EXPECT_EQ(5 * nn_iovs, nn);
+        EXPECT_EQ(5 * nn_iovs, io.sbytes);
     }
 }
 

@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2013-2019 Winlin
+ * Copyright (c) 2013-2020 Winlin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -213,7 +213,8 @@ private:
     // The c0c3 caches must use unit SRS_CONSTS_RTMP_MAX_FMT0_HEADER_SIZE bytes.
     //
     // @remark, the c0c3 cache cannot be realloc.
-    char out_c0c3_caches[SRS_CONSTS_C0C3_HEADERS_MAX];
+    // To allocate it in heap to make VS2015 happy.
+    char* out_c0c3_caches;
     // Whether warned user to increase the c0c3 header cache.
     bool warned_c0c3_cache_dry;
     // The output chunk size, default to 128, set by config.
@@ -706,9 +707,9 @@ public:
     // @param server_ip the ip of server.
     virtual srs_error_t response_connect_app(SrsRequest* req, const char* server_ip = NULL);
     // Redirect the connection to another rtmp server.
-    // @param the hostname or ip of target.
+    // @param a RTMP url to redirect to.
     // @param whether the client accept the redirect.
-    virtual srs_error_t redirect(SrsRequest* r, std::string host, int port, bool& accepted);
+    virtual srs_error_t redirect(SrsRequest* r, std::string url, bool& accepted);
     // Reject the connect app request.
     virtual void response_connect_reject(SrsRequest* req, const char* desc);
     // Response  client the onBWDone message.

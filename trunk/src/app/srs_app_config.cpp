@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2013-2019 Winlin
+ * Copyright (c) 2013-2020 Winlin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -81,36 +81,6 @@ const char* _srs_version = "XCORE-" RTMP_SIG_SRS_SERVER;
 srs_error_t srs_config_dumps_engine(SrsConfDirective* dir, SrsJsonObject* engine);
 
 /**
- * whether the two vector actual equals, for instance,
- *      srs_vector_actual_equals([0, 1, 2], [0, 1, 2])      ==== true
- *      srs_vector_actual_equals([0, 1, 2], [2, 1, 0])      ==== true
- *      srs_vector_actual_equals([0, 1, 2], [0, 2, 1])      ==== true
- *      srs_vector_actual_equals([0, 1, 2], [0, 1, 2, 3])   ==== false
- *      srs_vector_actual_equals([1, 2, 3], [0, 1, 2])      ==== false
- */
-template<typename T>
-bool srs_vector_actual_equals(const vector<T>& a, const vector<T>& b)
-{
-    // all elements of a in b.
-    for (int i = 0; i < (int)a.size(); i++) {
-        const T& e = a.at(i);
-        if (::find(b.begin(), b.end(), e) == b.end()) {
-            return false;
-        }
-    }
-    
-    // all elements of b in a.
-    for (int i = 0; i < (int)b.size(); i++) {
-        const T& e = b.at(i);
-        if (::find(a.begin(), a.end(), e) == a.end()) {
-            return false;
-        }
-    }
-    
-    return true;
-}
-
-/**
  * whether the ch is common space.
  */
 bool is_common_space(char ch)
@@ -132,7 +102,8 @@ namespace _srs_internal
     {
         srs_freepa(start);
     }
-    
+
+    // LCOV_EXCL_START
     srs_error_t SrsConfigBuffer::fullfill(const char* filename)
     {
         srs_error_t err = srs_success;
@@ -160,6 +131,7 @@ namespace _srs_internal
         
         return err;
     }
+    // LCOV_EXCL_STOP
     
     bool SrsConfigBuffer::empty()
     {
@@ -250,6 +222,14 @@ bool srs_directive_equals(SrsConfDirective* a, SrsConfDirective* b, string excep
     return true;
 }
 
+void set_config_directive(SrsConfDirective* parent, string dir, string value)
+{
+    SrsConfDirective* d = parent->get_or_create(dir);
+    d->name = dir;
+    d->args.clear();
+    d->args.push_back(value);
+}
+
 bool srs_config_hls_is_on_error_ignore(string strategy)
 {
     return strategy == "ignore";
@@ -316,7 +296,7 @@ bool srs_config_apply_filter(SrsConfDirective* dvr_apply, SrsRequest* req)
     return false;
 }
 
-string srs_config_bool2switch(const string& sbool)
+string srs_config_bool2switch(string sbool)
 {
     return sbool == "true"? "on":"off";
 }
@@ -413,7 +393,7 @@ srs_error_t srs_config_transform_vhost(SrsConfDirective* root)
                 if (enabled) {
                     SrsConfDirective* mr = publish->get_or_create("mr");
                     mr->args = enabled->args;
-                    srs_warn("transform: vhost.mr.enabled to vhost.publish.mr.enabled for %s", dir->name.c_str());
+                    srs_warn("transform: vhost.mr.enabled to vhost.publish.mr for %s", dir->name.c_str());
                 }
                 
                 SrsConfDirective* latency = conf->get("latency");
@@ -525,6 +505,7 @@ srs_error_t srs_config_transform_vhost(SrsConfDirective* root)
     return err;
 }
 
+// LCOV_EXCL_START
 srs_error_t srs_config_dumps_engine(SrsConfDirective* dir, SrsJsonObject* engine)
 {
     srs_error_t err = srs_success;
@@ -626,6 +607,7 @@ srs_error_t srs_config_dumps_engine(SrsConfDirective* dir, SrsJsonObject* engine
     
     return err;
 }
+// LCOV_EXCL_STOP
 
 SrsConfDirective::SrsConfDirective()
 {
@@ -753,10 +735,25 @@ SrsConfDirective* SrsConfDirective::get_or_create(string n, string a0)
     if (!conf) {
         conf = new SrsConfDirective();
         conf->name = n;
-        conf->set_arg0(a0);
+        conf->args.push_back(a0);
         directives.push_back(conf);
     }
     
+    return conf;
+}
+
+SrsConfDirective* SrsConfDirective::get_or_create(string n, string a0, string a1)
+{
+    SrsConfDirective* conf = get(n, a0);
+
+    if (!conf) {
+        conf = new SrsConfDirective();
+        conf->name = n;
+        conf->args.push_back(a0);
+        conf->args.push_back(a1);
+        directives.push_back(conf);
+    }
+
     return conf;
 }
 
@@ -890,6 +887,7 @@ srs_error_t SrsConfDirective::persistence(SrsFileWriter* writer, int level)
     return err;
 }
 
+// LCOV_EXCL_START
 SrsJsonArray* SrsConfDirective::dumps_args()
 {
     SrsJsonArray* arr = SrsJsonAny::array();
@@ -907,7 +905,7 @@ SrsJsonAny* SrsConfDirective::dumps_arg0_to_str()
 
 SrsJsonAny* SrsConfDirective::dumps_arg0_to_integer()
 {
-    return SrsJsonAny::integer(::atol(arg0().c_str()));
+    return SrsJsonAny::integer(::atoll(arg0().c_str()));
 }
 
 SrsJsonAny* SrsConfDirective::dumps_arg0_to_number()
@@ -919,6 +917,7 @@ SrsJsonAny* SrsConfDirective::dumps_arg0_to_boolean()
 {
     return SrsJsonAny::boolean(arg0() == "on");
 }
+// LCOV_EXCL_STOP
 
 // see: ngx_conf_parse
 srs_error_t SrsConfDirective::parse_conf(SrsConfigBuffer* buffer, SrsDirectiveType type)
@@ -1148,24 +1147,6 @@ bool SrsConfig::is_dolphin()
     return dolphin;
 }
 
-void SrsConfig::set_config_directive(SrsConfDirective* parent, string dir, string value)
-{
-    SrsConfDirective* d = parent->get(dir);
-    
-    if (!d) {
-        d = new SrsConfDirective();
-        if (!dir.empty()) {
-            d->name = dir;
-        }
-        parent->directives.push_back(d);
-    }
-    
-    d->args.clear();
-    if (!value.empty()) {
-        d->args.push_back(value);
-    }
-}
-
 void SrsConfig::subscribe(ISrsReloadHandler* handler)
 {
     std::vector<ISrsReloadHandler*>::iterator it;
@@ -1190,6 +1171,7 @@ void SrsConfig::unsubscribe(ISrsReloadHandler* handler)
     subscribes.erase(it);
 }
 
+// LCOV_EXCL_START
 srs_error_t SrsConfig::reload()
 {
     srs_error_t err = srs_success;
@@ -1216,6 +1198,7 @@ srs_error_t SrsConfig::reload()
     
     return err;
 }
+// LCOV_EXCL_STOP
 
 srs_error_t SrsConfig::reload_vhost(SrsConfDirective* old_root)
 {
@@ -1882,6 +1865,7 @@ srs_error_t SrsConfig::reload_ingest(SrsConfDirective* new_vhost, SrsConfDirecti
 }
 
 // see: ngx_get_options
+// LCOV_EXCL_START
 srs_error_t SrsConfig::parse_options(int argc, char** argv)
 {
     srs_error_t err = srs_success;
@@ -3157,6 +3141,7 @@ srs_error_t SrsConfig::raw_disable_dvr(string vhost, string stream, bool& applie
     
     return err;
 }
+// LCOV_EXCL_STOP
 
 srs_error_t SrsConfig::do_reload_listen()
 {
@@ -3344,6 +3329,7 @@ string SrsConfig::config()
     return config_file;
 }
 
+// LCOV_EXCL_START
 srs_error_t SrsConfig::parse_argv(int& i, char** argv)
 {
     srs_error_t err = srs_success;
@@ -3459,6 +3445,7 @@ srs_error_t SrsConfig::parse_file(const char* filename)
     
     return err;
 }
+// LCOV_EXCL_STOP
 
 srs_error_t SrsConfig::check_config()
 {
@@ -3500,6 +3487,9 @@ srs_error_t SrsConfig::check_normal_config()
             && n != "http_api" && n != "stats" && n != "vhost" && n != "pithy_print_ms"
             && n != "http_server" && n != "stream_caster"
             && n != "utc_time" && n != "work_dir" && n != "asprocess"
+            && n != "ff_log_level" && n != "grace_final_wait" && n != "force_grace_quit"
+            && n != "grace_start_wait" && n != "empty_ip_ok" && n != "disable_daemon_for_docker"
+            && n != "inotify_auto_reload" && n != "auto_reload_for_docker"
             ) {
             return srs_error_new(ERROR_SYSTEM_CONFIG_INVALID, "illegal directive %s", n.c_str());
         }
@@ -3855,17 +3845,6 @@ srs_error_t SrsConfig::check_normal_config()
                 SRS_CONSTS_RTMP_MIN_CHUNK_SIZE, SRS_CONSTS_RTMP_MAX_CHUNK_SIZE);
         }
     }
-    for (int i = 0; i < (int)vhosts.size(); i++) {
-        SrsConfDirective* vhost = vhosts[i];
-        srs_assert(vhost != NULL);
-        if (get_dvr_enabled(vhost->arg0())) {
-            srs_warn("can't enable vhost.dvr of %s", vhost->arg0().c_str());
-        }
-        if (get_hls_enabled(vhost->arg0())) {
-            srs_warn("can't enable vhost.hls of %s", vhost->arg0().c_str());
-        }
-        // TODO: FIXME: required http server when hls storage is ram or both.
-    }
     
     // asprocess conflict with daemon
     if (get_asprocess() && get_daemon()) {
@@ -3875,6 +3854,7 @@ srs_error_t SrsConfig::check_normal_config()
     return err;
 }
 
+// LCOV_EXCL_START
 srs_error_t SrsConfig::check_number_connections()
 {
     srs_error_t err = srs_success;
@@ -3924,12 +3904,13 @@ srs_error_t SrsConfig::check_number_connections()
     
     return err;
 }
+// LCOV_EXCL_STOP
 
 srs_error_t SrsConfig::parse_buffer(SrsConfigBuffer* buffer)
 {
     srs_error_t err = srs_success;
 
-	// We use a new root to parse buffer, to allow parse multiple times.
+    // We use a new root to parse buffer, to allow parse multiple times.
     srs_freep(root);
     root = new SrsConfDirective();
 
@@ -4069,6 +4050,90 @@ bool SrsConfig::get_asprocess()
     }
     
     return SRS_CONF_PERFER_FALSE(conf->arg0());
+}
+
+bool SrsConfig::empty_ip_ok()
+{
+    static bool DEFAULT = true;
+
+    SrsConfDirective* conf = root->get("empty_ip_ok");
+    if (!conf || conf->arg0().empty()) {
+        return DEFAULT;
+    }
+
+    return SRS_CONF_PERFER_TRUE(conf->arg0());
+}
+
+srs_utime_t SrsConfig::get_grace_start_wait()
+{
+    static srs_utime_t DEFAULT = 2300 * SRS_UTIME_MILLISECONDS;
+
+    SrsConfDirective* conf = root->get("grace_start_wait");
+    if (!conf || conf->arg0().empty()) {
+        return DEFAULT;
+    }
+
+    return (srs_utime_t)(::atol(conf->arg0().c_str()) * SRS_UTIME_MILLISECONDS);
+}
+
+srs_utime_t SrsConfig::get_grace_final_wait()
+{
+    static srs_utime_t DEFAULT = 3200 * SRS_UTIME_MILLISECONDS;
+
+    SrsConfDirective* conf = root->get("grace_final_wait");
+    if (!conf || conf->arg0().empty()) {
+        return DEFAULT;
+    }
+
+    return (srs_utime_t)(::atol(conf->arg0().c_str()) * SRS_UTIME_MILLISECONDS);
+}
+
+bool SrsConfig::is_force_grace_quit()
+{
+    static bool DEFAULT = false;
+
+    SrsConfDirective* conf = root->get("force_grace_quit");
+    if (!conf || conf->arg0().empty()) {
+        return DEFAULT;
+    }
+
+    return SRS_CONF_PERFER_FALSE(conf->arg0());
+}
+
+bool SrsConfig::disable_daemon_for_docker()
+{
+    static bool DEFAULT = true;
+
+    SrsConfDirective* conf = root->get("disable_daemon_for_docker");
+    if (!conf || conf->arg0().empty()) {
+        return DEFAULT;
+    }
+
+    return SRS_CONF_PERFER_TRUE(conf->arg0());
+}
+
+bool SrsConfig::inotify_auto_reload()
+{
+    static bool DEFAULT = false;
+
+    SrsConfDirective* conf = root->get("inotify_auto_reload");
+    if (!conf || conf->arg0().empty()) {
+        return DEFAULT;
+    }
+
+    return SRS_CONF_PERFER_FALSE(conf->arg0());
+}
+
+bool SrsConfig::auto_reload_for_docker()
+{
+    static bool DEFAULT = true;
+
+    SrsConfDirective* conf = root->get("auto_reload_for_docker");
+    if (!conf || conf->arg0().empty()) {
+        return DEFAULT;
+    }
+
+    return SRS_CONF_PERFER_TRUE(conf->arg0());
 }
 
 vector<SrsConfDirective*> SrsConfig::get_stream_casters()
@@ -4576,7 +4641,7 @@ bool SrsConfig::get_mr_enabled(string vhost)
 
 srs_utime_t SrsConfig::get_mr_sleep(string vhost)
 {
-	static srs_utime_t DEFAULT = SRS_PERF_MR_SLEEP;
+    static srs_utime_t DEFAULT = SRS_PERF_MR_SLEEP;
 
     SrsConfDirective* conf = get_vhost(vhost);
     if (!conf) {
@@ -4598,7 +4663,7 @@ srs_utime_t SrsConfig::get_mr_sleep(string vhost)
 
 srs_utime_t SrsConfig::get_mw_sleep(string vhost)
 {
-	static srs_utime_t DEFAULT = SRS_PERF_MW_SLEEP;
+    static srs_utime_t DEFAULT = SRS_PERF_MW_SLEEP;
 
     SrsConfDirective* conf = get_vhost(vhost);
     if (!conf) {
@@ -5268,7 +5333,9 @@ vector<string> SrsConfig::get_engine_perfile(SrsConfDirective* conf)
         }
         
         perfile.push_back(srs_prefix_underscores_ifno(option->name));
-        perfile.push_back(option->arg0());
+        if (!option->arg0().empty()) {
+            perfile.push_back(option->arg0());
+        }
     }
     
     return perfile;
@@ -5310,7 +5377,9 @@ vector<string> SrsConfig::get_engine_vfilter(SrsConfDirective* conf)
         }
         
         vfilter.push_back(srs_prefix_underscores_ifno(filter->name));
-        vfilter.push_back(filter->arg0());
+        if (!filter->arg0().empty()) {
+            vfilter.push_back(filter->arg0());
+        }
     }
     
     return vfilter;
@@ -5464,7 +5533,9 @@ vector<string> SrsConfig::get_engine_vparams(SrsConfDirective* conf)
         }
         
         vparams.push_back(srs_prefix_underscores_ifno(filter->name));
-        vparams.push_back(filter->arg0());
+        if (!filter->arg0().empty()) {
+            vparams.push_back(filter->arg0());
+        }
     }
     
     return vparams;
@@ -5554,7 +5625,9 @@ vector<string> SrsConfig::get_engine_aparams(SrsConfDirective* conf)
         }
         
         aparams.push_back(srs_prefix_underscores_ifno(filter->name));
-        aparams.push_back(filter->arg0());
+        if (!filter->arg0().empty()) {
+            aparams.push_back(filter->arg0());
+        }
     }
     
     return aparams;
@@ -5778,13 +5851,13 @@ string SrsConfig::get_log_file()
     return conf->arg0();
 }
 
-bool SrsConfig::get_ffmpeg_log_enabled()
+bool SrsConfig::get_ff_log_enabled()
 {
-    string log = get_ffmpeg_log_dir();
+    string log = get_ff_log_dir();
     return log != SRS_CONSTS_NULL_FILE;
 }
 
-string SrsConfig::get_ffmpeg_log_dir()
+string SrsConfig::get_ff_log_dir()
 {
     static string DEFAULT = "./objs";
     
@@ -5793,6 +5866,18 @@ string SrsConfig::get_ffmpeg_log_dir()
         return DEFAULT;
     }
     
+    return conf->arg0();
+}
+
+string SrsConfig::get_ff_log_level()
+{
+    static string DEFAULT = "info";
+
+    SrsConfDirective* conf = root->get("ff_log_level");
+    if (!conf || conf->arg0().empty()) {
+        return DEFAULT;
+    }
+
     return conf->arg0();
 }
 
@@ -5821,7 +5906,7 @@ bool SrsConfig::get_dash_enabled(string vhost)
 
 srs_utime_t SrsConfig::get_dash_fragment(string vhost)
 {
-    static int DEFAULT = 3 * SRS_UTIME_SECONDS;
+    static int DEFAULT = 30 * SRS_UTIME_SECONDS;
     
     SrsConfDirective* conf = get_dash(vhost);
     if (!conf) {
@@ -5838,7 +5923,7 @@ srs_utime_t SrsConfig::get_dash_fragment(string vhost)
 
 srs_utime_t SrsConfig::get_dash_update_period(string vhost)
 {
-    static srs_utime_t DEFAULT = 30 * SRS_UTIME_SECONDS;
+    static srs_utime_t DEFAULT = 150 * SRS_UTIME_SECONDS;
     
     SrsConfDirective* conf = get_dash(vhost);
     if (!conf) {
@@ -5855,7 +5940,7 @@ srs_utime_t SrsConfig::get_dash_update_period(string vhost)
 
 srs_utime_t SrsConfig::get_dash_timeshift(string vhost)
 {
-    static srs_utime_t DEFAULT = 60 * SRS_UTIME_SECONDS;
+    static srs_utime_t DEFAULT = 300 * SRS_UTIME_SECONDS;
     
     SrsConfDirective* conf = get_dash(vhost);
     if (!conf) {
@@ -6800,22 +6885,22 @@ string SrsConfig::get_vhost_http_dir(string vhost)
 bool SrsConfig::get_vhost_http_remux_enabled(string vhost)
 {
     static bool DEFAULT = false;
-    
+
     SrsConfDirective* conf = get_vhost(vhost);
     if (!conf) {
         return DEFAULT;
     }
-    
+
     conf = conf->get("http_remux");
     if (!conf) {
         return DEFAULT;
     }
-    
+
     conf = conf->get("enabled");
     if (!conf || conf->arg0().empty()) {
         return DEFAULT;
     }
-    
+
     return SRS_CONF_PERFER_FALSE(conf->arg0());
 }
 

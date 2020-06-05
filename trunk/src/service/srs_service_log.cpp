@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2013-2019 Winlin
+ * Copyright (c) 2013-2020 Winlin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -46,7 +46,7 @@ int SrsThreadContext::generate_id()
     static int id = 0;
 
     if (id == 0) {
-        id = (100 + ((int)(int64_t)this)%1000);
+        id = (100 + ((uint32_t)(int64_t)this)%1000);
     }
     
     int gid = id++;
@@ -82,6 +82,7 @@ void SrsThreadContext::clear_cid()
     }
 }
 
+// LCOV_EXCL_START
 SrsConsoleLog::SrsConsoleLog(SrsLogLevel l, bool u)
 {
     level = l;
@@ -208,6 +209,7 @@ void SrsConsoleLog::error(const char* tag, int context_id, const char* fmt, ...)
     
     fprintf(stderr, "%s\n", buffer);
 }
+// LCOV_EXCL_STOP
 
 bool srs_log_header(char* buffer, int size, bool utc, bool dangerous, const char* tag, int cid, const char* level, int* psize)
 {

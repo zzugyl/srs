@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2013-2019 Winlin
+ * Copyright (c) 2013-2020 Winlin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -61,6 +61,7 @@ void srs_vhost_resolve(string& vhost, string& app, string& param)
     app = srs_string_replace(app, ",", "?");
     app = srs_string_replace(app, "...", "?");
     app = srs_string_replace(app, "&&", "?");
+    app = srs_string_replace(app, "&", "?");
     app = srs_string_replace(app, "=", "?");
     
     if (srs_string_ends_with(app, "/_definst_")) {
@@ -76,10 +77,12 @@ void srs_vhost_resolve(string& vhost, string& app, string& param)
             if (!query.empty()) {
                 vhost = query;
             }
-            if ((pos = vhost.find("?")) != std::string::npos) {
-                vhost = vhost.substr(0, pos);
-            }
         }
+    }
+
+    // vhost with params.
+    if ((pos = vhost.find("?")) != std::string::npos) {
+        vhost = vhost.substr(0, pos);
     }
     
     /* others */
@@ -199,7 +202,7 @@ string srs_generate_stream_with_query(string host, string vhost, string stream, 
     }
     
     // Remove the start & when param is empty.
-    srs_string_trim_start(query, "&");
+    query = srs_string_trim_start(query, "&");
 
     // Prefix query with ?.
     if (!query.empty() && !srs_string_starts_with(query, "?")) {
@@ -333,21 +336,25 @@ srs_error_t srs_write_large_iovs(ISrsProtocolReadWriter* skt, iovec* iovs, int s
 #endif
     
     // send in a time.
-    if (size < limits) {
+    if (size <= limits) {
         if ((err = skt->writev(iovs, size, pnwrite)) != srs_success) {
             return srs_error_wrap(err, "writev");
         }
         return err;
     }
-    
+   
     // send in multiple times.
     int cur_iov = 0;
+    ssize_t nwrite = 0;
     while (cur_iov < size) {
         int cur_count = srs_min(limits, size - cur_iov);
-        if ((err = skt->writev(iovs + cur_iov, cur_count, pnwrite)) != srs_success) {
+        if ((err = skt->writev(iovs + cur_iov, cur_count, &nwrite)) != srs_success) {
             return srs_error_wrap(err, "writev");
         }
         cur_iov += cur_count;
+        if (pnwrite) {
+            *pnwrite += nwrite;
+        }
     }
     
     return err;

@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2013-2019 Winlin
+ * Copyright (c) 2013-2020 Winlin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -101,6 +101,9 @@ public:
     virtual srs_error_t pop_message(ISrsHttpMessage** preq);
 public:
     virtual srs_error_t on_got_http_message(ISrsHttpMessage* msg);
+public:
+    // Set connection to expired.
+    virtual void expire();
 };
 
 // The http server, use http stream or static server to serve requests.

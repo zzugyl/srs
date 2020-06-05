@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2013-2019 Winlin
+ * Copyright (c) 2013-2020 Winlin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -34,6 +34,8 @@
 #ifndef _WIN32
 #include <sys/uio.h>
 #endif
+
+class SrsFileReader;
 
 /**
  * file writer, to write to file.
@@ -71,6 +73,16 @@ public:
     virtual srs_error_t write(void* buf, size_t count, ssize_t* pnwrite);
     virtual srs_error_t writev(const iovec* iov, int iovcnt, ssize_t* pnwrite);
     virtual srs_error_t lseek(off_t offset, int whence, off_t* seeked);
+};
+
+// The file reader factory.
+class ISrsFileReaderFactory
+{
+public:
+    ISrsFileReaderFactory();
+    virtual ~ISrsFileReaderFactory();
+public:
+    virtual SrsFileReader* create_file_reader();
 };
 
 /**

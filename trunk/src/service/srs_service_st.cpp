@@ -1,7 +1,7 @@
 /**
  * The MIT License (MIT)
  *
- * Copyright (c) 2013-2019 Winlin
+ * Copyright (c) 2013-2020 Winlin
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -115,7 +115,12 @@ srs_error_t srs_fd_reuseport(int fd)
 #if defined(SO_REUSEPORT)
     int v = 1;
     if (setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &v, sizeof(int)) == -1) {
-        return srs_error_new(ERROR_SOCKET_SETREUSEADDR, "SO_REUSEPORT fd=%v", fd);
+        #ifdef SRS_AUTO_CROSSBUILD
+            srs_warn("SO_REUSEPORT disabled for crossbuild");
+            return srs_success;
+        #else
+            return srs_error_new(ERROR_SOCKET_SETREUSEADDR, "SO_REUSEPORT fd=%v", fd);
+        #endif
     }
 #else
     #warning "SO_REUSEPORT is not supported by your OS"
@@ -157,7 +162,7 @@ srs_error_t srs_tcp_connect(string server, int port, srs_utime_t tm, srs_netfd_t
     
     addrinfo hints;
     memset(&hints, 0, sizeof(hints));
-    hints.ai_family   = AF_UNSPEC;
+    hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
     
     addrinfo* r  = NULL;
@@ -187,6 +192,43 @@ srs_error_t srs_tcp_connect(string server, int port, srs_utime_t tm, srs_netfd_t
     return srs_success;
 }
 
+srs_error_t do_srs_tcp_listen(int fd, addrinfo* r, srs_netfd_t* pfd)
+{
+	srs_error_t err = srs_success;
+
+    // Detect alive for TCP connection.
+    // @see https://github.com/ossrs/srs/issues/1044
+    if ((err = srs_fd_keepalive(fd)) != srs_success) {
+        return srs_error_wrap(err, "set keepalive");
+    }
+
+    if ((err = srs_fd_closeexec(fd)) != srs_success) {
+        return srs_error_wrap(err, "set closeexec");
+    }
+
+    if ((err = srs_fd_reuseaddr(fd)) != srs_success) {
+        return srs_error_wrap(err, "set reuseaddr");
+    }
+
+    if ((err = srs_fd_reuseport(fd)) != srs_success) {
+        return srs_error_wrap(err, "set reuseport");
+    }
+
+    if (bind(fd, r->ai_addr, r->ai_addrlen) == -1) {
+        return srs_error_new(ERROR_SOCKET_BIND, "bind");
+    }
+
+    if (::listen(fd, SERVER_LISTEN_BACKLOG) == -1) {
+        return srs_error_new(ERROR_SOCKET_LISTEN, "listen");
+    }
+
+    if ((*pfd = srs_netfd_open_socket(fd)) == NULL){
+        return srs_error_new(ERROR_ST_OPEN_SOCKET, "st open");
+    }
+
+    return err;
+}
+
 srs_error_t srs_tcp_listen(std::string ip, int port, srs_netfd_t* pfd)
 {
 	srs_error_t err = srs_success;
@@ -213,41 +255,36 @@ srs_error_t srs_tcp_listen(std::string ip, int port, srs_netfd_t* pfd)
             r->ai_family, r->ai_socktype, r->ai_protocol);
     }
 
-    // Detect alive for TCP connection.
-    // @see https://github.com/ossrs/srs/issues/1044
-    if ((err = srs_fd_keepalive(fd)) != srs_success) {
+    if ((err = do_srs_tcp_listen(fd, r, pfd)) != srs_success) {
         ::close(fd);
-        return srs_error_wrap(err, "set keepalive fd=%d", fd);
+        return srs_error_wrap(err, "fd=%d", fd);
     }
 
+    return err;
+}
+
+srs_error_t do_srs_udp_listen(int fd, addrinfo* r, srs_netfd_t* pfd)
+{
+	srs_error_t err = srs_success;
+
     if ((err = srs_fd_closeexec(fd)) != srs_success) {
-        ::close(fd);
-        return srs_error_wrap(err, "set closeexec fd=%d", fd);
+        return srs_error_wrap(err, "set closeexec");
     }
 
     if ((err = srs_fd_reuseaddr(fd)) != srs_success) {
-        ::close(fd);
-        return srs_error_wrap(err, "set reuseaddr fd=%d", fd);
+        return srs_error_wrap(err, "set reuseaddr");
     }
 
     if ((err = srs_fd_reuseport(fd)) != srs_success) {
-        ::close(fd);
-        return srs_error_wrap(err, "set reuseport fd=%d", fd);
+        return srs_error_wrap(err, "set reuseport");
     }
 
     if (bind(fd, r->ai_addr, r->ai_addrlen) == -1) {
-        ::close(fd);
-        return srs_error_new(ERROR_SOCKET_BIND, "bind fd=%d", fd);
-    }
-
-    if (::listen(fd, SERVER_LISTEN_BACKLOG) == -1) {
-        ::close(fd);
-        return srs_error_new(ERROR_SOCKET_LISTEN, "listen fd=%d", fd);
+        return srs_error_new(ERROR_SOCKET_BIND, "bind");
     }
 
     if ((*pfd = srs_netfd_open_socket(fd)) == NULL){
-        ::close(fd);
-        return srs_error_new(ERROR_ST_OPEN_SOCKET, "st open fd=%d", fd);
+        return srs_error_new(ERROR_ST_OPEN_SOCKET, "st open");
     }
 
     return err;
@@ -279,29 +316,9 @@ srs_error_t srs_udp_listen(std::string ip, int port, srs_netfd_t* pfd)
             r->ai_family, r->ai_socktype, r->ai_protocol);
     }
 
-    if ((err = srs_fd_closeexec(fd)) != srs_success) {
+    if ((err = do_srs_udp_listen(fd, r, pfd)) != srs_success) {
         ::close(fd);
-        return srs_error_wrap(err, "set closeexec fd=%d", fd);
-    }
-
-    if ((err = srs_fd_reuseaddr(fd)) != srs_success) {
-        ::close(fd);
-        return srs_error_wrap(err, "set reuseaddr fd=%d", fd);
-    }
-
-    if ((err = srs_fd_reuseport(fd)) != srs_success) {
-        ::close(fd);
-        return srs_error_wrap(err, "set reuseport fd=%d", fd);
-    }
-
-    if (bind(fd, r->ai_addr, r->ai_addrlen) == -1) {
-        ::close(fd);
-        return srs_error_new(ERROR_SOCKET_BIND, "bind fd=%d", fd);
-    }
-
-    if ((*pfd = srs_netfd_open_socket(fd)) == NULL){
-        ::close(fd);
-        return srs_error_new(ERROR_ST_OPEN_SOCKET, "st open fd=%d", fd);
+        return srs_error_wrap(err, "fd=%d", fd);
     }
 
     return err;
@@ -339,6 +356,9 @@ srs_mutex_t srs_mutex_new()
 
 int srs_mutex_destroy(srs_mutex_t mutex)
 {
+    if (!mutex) {
+        return 0;
+    }
     return st_mutex_destroy((st_mutex_t)mutex);
 }
 
