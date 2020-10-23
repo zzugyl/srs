@@ -64,7 +64,7 @@
 
 // The common io timeout, for connect, recv or send.
 // TODO: FIXME: Maybe change to smaller value, such as 3s?
-#define SRS_CONSTS_RTMP_TIMEOUT (30 * SRS_UTIME_SECONDS)
+#define SRS_CONSTS_RTMP_TIMEOUT (60 * SRS_UTIME_SECONDS)
 
 // The timeout to wait for client control message,
 // if timeout, we generally ignore and send the data to client,
